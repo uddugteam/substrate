@@ -1,18 +1,41 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Encode, Decode};
-use frame_support::{debug, decl_module, decl_storage, decl_event, decl_error, weights::Weight};
-use frame_system::{self as system, ensure_signed};
+use frame_support::{
+    dispatch::{DispatchResult, DispatchResultWithPostInfo},
+    debug, decl_module, decl_storage, decl_event, decl_error, weights::Weight, traits::Get
+};
+use frame_system::{
+    self as system, ensure_none, ensure_signed,
+    offchain::{
+        AppCrypto, CreateSignedTransaction, SendSignedTransaction, SendUnsignedTransaction,
+        SignedPayload, Signer, SigningTypes, SubmitTransaction,
+    },
+};
 use sp_core::offchain::{Duration, IpfsRequest, IpfsResponse, OpaqueMultiaddr, Timestamp};
 use sp_io::offchain::timestamp;
 use sp_runtime::offchain::ipfs;
 use sp_std::{str, vec::Vec};
+use sp_runtime::{
+    offchain as rt_offchain,
+    offchain::{
+        storage::StorageValueRef,
+        storage_lock::{BlockAndTime, StorageLock},
+    },
+    transaction_validity::{
+        InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity, ValidTransaction,
+    },
+    traits::{
+        self, AtLeast32Bit, AtLeast32BitUnsigned, BadOrigin, Bounded,
+        CheckEqual, Dispatchable, Hash, Lookup, LookupError, MaybeDisplay, MaybeMallocSizeOf,
+        MaybeSerializeDeserialize, Member, One, Saturating, SimpleBitOps, StaticLookup, Zero,
+    },
+    DispatchError, Either, Perbill, RuntimeDebug,
+};
 
-/// The pallet's configuration trait.
-pub trait Trait: system::Trait {
-    /// The overarching event type.
-    type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
-}
+/// The type to sign and send transactions.
+const UNSIGNED_TXS_PRIORITY: u64 = 100;
+
 
 #[derive(Encode, Decode, PartialEq)]
 enum ConnectionCommand {
@@ -22,17 +45,37 @@ enum ConnectionCommand {
 
 #[derive(Encode, Decode, PartialEq)]
 enum DataCommand {
-    AddBytes(Vec<u8>),
-    CatBytes(Vec<u8>),
     InsertPin(Vec<u8>),
     RemoveBlock(Vec<u8>),
     RemovePin(Vec<u8>),
+    SetKeyValue(Vec<u8>, Vec<u8>),
+    GetKeyValue(Vec<u8>),
+    DelKeyValue(Vec<u8>),
 }
 
 #[derive(Encode, Decode, PartialEq)]
 enum DhtCommand {
     FindPeer(Vec<u8>),
     GetProviders(Vec<u8>),
+}
+
+/// This is the pallet's configuration trait
+pub trait Trait: system::Trait + CreateSignedTransaction<Call<Self>> {
+    /// The identifier type for an offchain worker.
+    type AuthorityId: AppCrypto<Self::Public, Self::Signature>;
+    /// The overarching dispatch call type.
+    type Call: From<Call<Self>>;
+    /// The overarching event type.
+    type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+    /// The type to sign and send transactions.
+    type UnsignedPriority: Get<TransactionPriority>;
+}
+
+// Custom data type
+#[derive(Debug)]
+enum TransactionType {
+    UnsignedSubmitNumber,
+    None,
 }
 
 // This pallet's storage items.
@@ -115,24 +158,11 @@ decl_module! {
             Self::deposit_event(RawEvent::DisconnectRequested(who));
         }
 
-        /// Add arbitrary bytes to the IPFS repository. The registered `Cid` is printed out in the
-        /// logs.
         #[weight = 200_000]
-        pub fn ipfs_add_bytes(origin, data: Vec<u8>) {
+        pub fn key_value_set(origin, key: Vec<u8>, data: Vec<u8>) {
             let who = ensure_signed(origin)?;
-
-            DataQueue::mutate(|queue| queue.push(DataCommand::AddBytes(data)));
+            DataQueue::mutate(|queue| queue.push(DataCommand::SetKeyValue(key, data)));
             Self::deposit_event(RawEvent::QueuedDataToAdd(who));
-        }
-
-        /// Find IPFS data pointed to by the given `Cid`; if it is valid UTF-8, it is printed in the
-        /// logs verbatim; otherwise, the decimal representation of the bytes is displayed instead.
-        #[weight = 100_000]
-        pub fn ipfs_cat_bytes(origin, cid: Vec<u8>) {
-            let who = ensure_signed(origin)?;
-
-            DataQueue::mutate(|queue| queue.push(DataCommand::CatBytes(cid)));
-            Self::deposit_event(RawEvent::QueuedDataToCat(who));
         }
 
         /// Add arbitrary bytes to the IPFS repository. The registered `Cid` is printed out in the
@@ -181,6 +211,13 @@ decl_module! {
             Self::deposit_event(RawEvent::FindProvidersIssued(who));
         }
 
+        #[weight = 0]
+		pub fn submit_number_unsigned(origin, number: u64) -> DispatchResult {
+			debug::info!("submit_number_unsigned: {:?}", number);
+			let _ = ensure_none(origin)?;
+			Self::append_or_replace_number(None, number)
+		}
+
         fn offchain_worker(block_number: T::BlockNumber) {
             // process connect/disconnect commands
             if let Err(e) = Self::connection_housekeeping() {
@@ -209,7 +246,16 @@ decl_module! {
     }
 }
 
+
 impl<T: Trait> Module<T> {
+    /// Add a new number to the list.
+    fn append_or_replace_number(who: Option<T::AccountId>, number: u64) -> DispatchResult {
+
+        debug::info!("Current average of numbers is: {}", 23);
+
+        Ok(())
+    }
+
     // send a request to the local IPFS node; can only be called be an off-chain worker
     fn ipfs_request(req: IpfsRequest, deadline: impl Into<Option<Timestamp>>) -> Result<IpfsResponse, Error<T>> {
         let ipfs_request = ipfs::PendingRequest::new(req).map_err(|_| Error::<T>::CantCreateRequest)?;
@@ -322,7 +368,7 @@ impl<T: Trait> Module<T> {
         let deadline = Some(timestamp().add(Duration::from_millis(1_000)));
         for cmd in data_queue.into_iter() {
             match cmd {
-                DataCommand::AddBytes(data) => {
+                DataCommand::SetKeyValue(key, data) => {
                     match Self::ipfs_request(IpfsRequest::AddBytes(data.clone()), deadline) {
                         Ok(IpfsResponse::AddBytes(cid)) => {
                             debug::info!(
@@ -334,13 +380,26 @@ impl<T: Trait> Module<T> {
                         Err(e) => debug::error!("IPFS: add error: {:?}", e),
                     }
                 }
-                DataCommand::CatBytes(data) => {
-                    match Self::ipfs_request(IpfsRequest::CatBytes(data.clone()), deadline) {
-                        Ok(IpfsResponse::CatBytes(data)) => {
-                            if let Ok(str) = str::from_utf8(&data) {
+                DataCommand::GetKeyValue(key) => {
+                    match Self::ipfs_request(IpfsRequest::CatBytes(key.clone()), deadline) {
+                        Ok(IpfsResponse::CatBytes(key)) => {
+                            if let Ok(str) = str::from_utf8(&key) {
                                 debug::info!("IPFS: got data: {:?}", str);
                             } else {
-                                debug::info!("IPFS: got data: {:x?}", data);
+                                debug::info!("IPFS: got data: {:x?}", key);
+                            };
+                        },
+                        Ok(_) => unreachable!("only CatBytes can be a response for that request type; qed"),
+                        Err(e) => debug::error!("IPFS: error: {:?}", e),
+                    }
+                }
+                DataCommand::DelKeyValue(key) => {
+                    match Self::ipfs_request(IpfsRequest::CatBytes(key.clone()), deadline) {
+                        Ok(IpfsResponse::CatBytes(key)) => {
+                            if let Ok(str) = str::from_utf8(&key) {
+                                debug::info!("IPFS: got data: {:?}", str);
+                            } else {
+                                debug::info!("IPFS: got data: {:x?}", key);
                             };
                         },
                         Ok(_) => unreachable!("only CatBytes can be a response for that request type; qed"),
@@ -407,4 +466,37 @@ impl<T: Trait> Module<T> {
 
         Ok(())
     }
+}
+
+impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
+    type Call = Call<T>;
+
+    fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
+        #[allow(unused_variables)]
+        if let Call::submit_number_unsigned(number) = call {
+            debug::native::info!("off-chain send_unsigned: number: {}", number);
+
+            ValidTransaction::with_tag_prefix("offchain-demo")
+                .priority(T::UnsignedPriority::get())
+                .and_provides([b"submit_number_unsigned"])
+                .longevity(3)
+                .propagate(true)
+                .build()
+        } else {
+            InvalidTransaction::Call.into()
+        }
+    }
+}
+
+/// Origin for the System pallet.
+#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode)]
+pub enum RawOrigin<AccountId> {
+    /// The system itself ordained this dispatch to happen: this is the highest privilege level.
+    Root,
+    /// It is signed by some public key and we provide the `AccountId`.
+    Signed(AccountId),
+    /// It is signed by nobody, can be either:
+    /// * included and agreed upon by the validators anyway,
+    /// * or unsigned transaction validated by a pallet.
+    None,
 }
