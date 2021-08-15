@@ -261,9 +261,14 @@ impl pallet_sudo::Trait for Runtime {
 	type Call = Call;
 }
 
+parameter_types! {
+	pub const UnsignedPriority: u64 = 100;
+}
+
 /// Configure the pallet template in pallets/template.
 impl template::Trait for Runtime {
 	type Event = Event;
+	type UnsignedPriority = UnsignedPriority;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.

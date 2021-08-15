@@ -1,17 +1,37 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Encode, Decode};
-use frame_support::{debug, decl_module, decl_storage, decl_event, decl_error, weights::Weight};
-use frame_system::{self as system, ensure_signed};
+use frame_support::{
+    debug, decl_module, decl_storage, dispatch::DispatchResult, traits::Get, decl_event, decl_error, weights::Weight,
+};
+use frame_system::{
+    self as system, ensure_none, ensure_signed,
+    offchain::{
+        AppCrypto, CreateSignedTransaction, SendSignedTransaction, Signer, SubmitTransaction,
+    },
+};
 use sp_core::offchain::{Duration, IpfsRequest, IpfsResponse, OpaqueMultiaddr, Timestamp};
 use sp_io::offchain::timestamp;
-use sp_runtime::offchain::ipfs;
+use sp_runtime::{
+    offchain as rt_offchain,
+    offchain::{
+        storage::StorageValueRef,
+        storage_lock::{StorageLock, BlockAndTime},
+        ipfs,
+    },
+    transaction_validity::{
+        InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
+        ValidTransaction,
+    },
+};
 use sp_std::{str, vec::Vec};
 
 /// The pallet's configuration trait.
 pub trait Trait: system::Trait {
     /// The overarching event type.
     type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+    /// The type to sign and send transactions.
+    type UnsignedPriority: Get<TransactionPriority>;
 }
 
 #[derive(Encode, Decode, PartialEq)]
@@ -22,8 +42,8 @@ enum ConnectionCommand {
 
 #[derive(Encode, Decode, PartialEq)]
 enum DataCommand {
-    AddBytes(Vec<u8>),
-    CatBytes(Vec<u8>),
+    SetKeyValue(Vec<u8>, Vec<u8>),
+    GetKeyValue(Vec<u8>),
     InsertPin(Vec<u8>),
     RemoveBlock(Vec<u8>),
     RemovePin(Vec<u8>),
@@ -44,6 +64,8 @@ decl_storage! {
         pub DataQueue: Vec<DataCommand>;
         // A list of requests to the DHT.
         pub DhtQueue: Vec<DhtCommand>;
+
+        KeyValue get(fn key_value): map hasher(blake2_128_concat) Vec<u8> => Vec<u8>;
     }
 }
 
@@ -93,6 +115,13 @@ decl_module! {
             0
         }
 
+        #[weight = 0]
+		pub fn set_key_value(origin, key: Vec<u8>, data: Vec<u8>) {
+            let _ = ensure_none(origin)?;
+
+            KeyValue::insert(key, data);
+		}
+
         /// Mark a `Multiaddr` as a desired connection target. The connection will be established
         /// during the next run of the off-chain `connection_housekeeping` process.
         #[weight = 100_000]
@@ -115,23 +144,20 @@ decl_module! {
             Self::deposit_event(RawEvent::DisconnectRequested(who));
         }
 
-        /// Add arbitrary bytes to the IPFS repository. The registered `Cid` is printed out in the
-        /// logs.
         #[weight = 200_000]
-        pub fn ipfs_add_bytes(origin, data: Vec<u8>) {
+        pub fn key_value_set(origin, key: Vec<u8>, data: Vec<u8>) {
             let who = ensure_signed(origin)?;
-
-            DataQueue::mutate(|queue| queue.push(DataCommand::AddBytes(data)));
+            DataQueue::mutate(|queue| queue.push(DataCommand::SetKeyValue(key, data)));
             Self::deposit_event(RawEvent::QueuedDataToAdd(who));
         }
 
         /// Find IPFS data pointed to by the given `Cid`; if it is valid UTF-8, it is printed in the
         /// logs verbatim; otherwise, the decimal representation of the bytes is displayed instead.
         #[weight = 100_000]
-        pub fn ipfs_cat_bytes(origin, cid: Vec<u8>) {
+        pub fn key_value_get(origin, key: Vec<u8>) {
             let who = ensure_signed(origin)?;
 
-            DataQueue::mutate(|queue| queue.push(DataCommand::CatBytes(cid)));
+            DataQueue::mutate(|queue| queue.push(DataCommand::GetKeyValue(key)));
             Self::deposit_event(RawEvent::QueuedDataToCat(who));
         }
 
@@ -322,25 +348,27 @@ impl<T: Trait> Module<T> {
         let deadline = Some(timestamp().add(Duration::from_millis(1_000)));
         for cmd in data_queue.into_iter() {
             match cmd {
-                DataCommand::AddBytes(data) => {
+                DataCommand::SetKeyValue(key, data) => {
                     match Self::ipfs_request(IpfsRequest::AddBytes(data.clone()), deadline) {
                         Ok(IpfsResponse::AddBytes(cid)) => {
                             debug::info!(
                                 "IPFS: added data with Cid {}",
                                 str::from_utf8(&cid).expect("our own IPFS node can be trusted here; qed")
                             );
+
+
                         },
                         Ok(_) => unreachable!("only AddBytes can be a response for that request type; qed"),
                         Err(e) => debug::error!("IPFS: add error: {:?}", e),
                     }
                 }
-                DataCommand::CatBytes(data) => {
-                    match Self::ipfs_request(IpfsRequest::CatBytes(data.clone()), deadline) {
-                        Ok(IpfsResponse::CatBytes(data)) => {
-                            if let Ok(str) = str::from_utf8(&data) {
+                DataCommand::GetKeyValue(key) => {
+                    match Self::ipfs_request(IpfsRequest::CatBytes(key.clone()), deadline) {
+                        Ok(IpfsResponse::CatBytes(key)) => {
+                            if let Ok(str) = str::from_utf8(&key) {
                                 debug::info!("IPFS: got data: {:?}", str);
                             } else {
-                                debug::info!("IPFS: got data: {:x?}", data);
+                                debug::info!("IPFS: got data: {:x?}", key);
                             };
                         },
                         Ok(_) => unreachable!("only CatBytes can be a response for that request type; qed"),
@@ -406,5 +434,23 @@ impl<T: Trait> Module<T> {
         );
 
         Ok(())
+    }
+}
+
+impl<T: Trait> frame_support::unsigned::ValidateUnsigned for Module<T> {
+    type Call = Call<T>;
+
+    fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
+        #[allow(unused_variables)]
+        if let Call::set_key_value(key, data) = call {
+            ValidTransaction::with_tag_prefix("offchain-demo")
+                .priority(T::UnsignedPriority::get())
+                .and_provides([b"set_key_value"])
+                .longevity(3)
+                .propagate(true)
+                .build()
+        } else {
+            InvalidTransaction::Call.into()
+        }
     }
 }
