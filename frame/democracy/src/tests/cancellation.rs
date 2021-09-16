@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,7 +26,7 @@ fn cancel_referendum_should_work() {
 			2,
 			set_balance_proposal_hash_and_note(2),
 			VoteThreshold::SuperMajorityApprove,
-			0
+			0,
 		);
 		assert_ok!(Democracy::vote(Origin::signed(1), r, aye(1)));
 		assert_ok!(Democracy::cancel_referendum(Origin::root(), r.into()));
@@ -67,7 +67,7 @@ fn emergency_cancel_should_work() {
 			2,
 			set_balance_proposal_hash_and_note(2),
 			VoteThreshold::SuperMajorityApprove,
-			2
+			2,
 		);
 		assert!(Democracy::referendum_status(r).is_ok());
 
@@ -81,7 +81,7 @@ fn emergency_cancel_should_work() {
 			2,
 			set_balance_proposal_hash_and_note(2),
 			VoteThreshold::SuperMajorityApprove,
-			2
+			2,
 		);
 		assert!(Democracy::referendum_status(r).is_ok());
 		assert_noop!(

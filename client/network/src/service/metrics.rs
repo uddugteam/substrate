@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,10 +18,8 @@
 
 use crate::transport::BandwidthSinks;
 use prometheus_endpoint::{
-	self as prometheus,
-	Counter, CounterVec, Gauge, GaugeVec, HistogramOpts,
-	PrometheusError, Registry, U64, Opts,
-	SourcedCounter, SourcedGauge, MetricSource,
+	self as prometheus, Counter, CounterVec, Gauge, GaugeVec, HistogramOpts, MetricSource, Opts,
+	PrometheusError, Registry, SourcedCounter, SourcedGauge, U64,
 };
 use std::{
 	str,
@@ -56,7 +54,6 @@ pub struct Metrics {
 	pub distinct_peers_connections_closed_total: Counter<U64>,
 	pub distinct_peers_connections_opened_total: Counter<U64>,
 	pub import_queue_blocks_submitted: Counter<U64>,
-	pub import_queue_finality_proofs_submitted: Counter<U64>,
 	pub import_queue_justifications_submitted: Counter<U64>,
 	pub incoming_connections_errors_total: CounterVec<U64>,
 	pub incoming_connections_total: Counter<U64>,
@@ -79,7 +76,6 @@ pub struct Metrics {
 	pub requests_in_success_total: HistogramVec,
 	pub requests_out_failure_total: CounterVec<U64>,
 	pub requests_out_success_total: HistogramVec,
-	pub requests_out_started_total: CounterVec<U64>,
 }
 
 impl Metrics {
@@ -111,10 +107,6 @@ impl Metrics {
 			import_queue_blocks_submitted: prometheus::register(Counter::new(
 				"import_queue_blocks_submitted",
 				"Number of blocks submitted to the import queue.",
-			)?, registry)?,
-			import_queue_finality_proofs_submitted: prometheus::register(Counter::new(
-				"import_queue_finality_proofs_submitted",
-				"Number of finality proofs submitted to the import queue.",
 			)?, registry)?,
 			import_queue_justifications_submitted: prometheus::register(Counter::new(
 				"import_queue_justifications_submitted",
@@ -235,7 +227,8 @@ impl Metrics {
 				HistogramOpts {
 					common_opts: Opts::new(
 						"sub_libp2p_requests_in_success_total",
-						"Total number of requests received and answered"
+						"For successful incoming requests, time between receiving the request and \
+						 starting to send the response"
 					),
 					buckets: prometheus::exponential_buckets(0.001, 2.0, 16)
 						.expect("parameters are always valid values; qed"),
@@ -253,18 +246,11 @@ impl Metrics {
 				HistogramOpts {
 					common_opts: Opts::new(
 						"sub_libp2p_requests_out_success_total",
-						"For successful requests, time between a request's start and finish"
+						"For successful outgoing requests, time between a request's start and finish"
 					),
 					buckets: prometheus::exponential_buckets(0.001, 2.0, 16)
 						.expect("parameters are always valid values; qed"),
 				},
-				&["protocol"]
-			)?, registry)?,
-			requests_out_started_total: prometheus::register(CounterVec::new(
-				Opts::new(
-					"sub_libp2p_requests_out_started_total",
-					"Total number of requests emitted"
-				),
 				&["protocol"]
 			)?, registry)?,
 		})
@@ -279,13 +265,14 @@ impl BandwidthCounters {
 	/// Registers the `BandwidthCounters` metric whose values are
 	/// obtained from the given sinks.
 	fn register(registry: &Registry, sinks: Arc<BandwidthSinks>) -> Result<(), PrometheusError> {
-		prometheus::register(SourcedCounter::new(
-			&Opts::new(
-				"sub_libp2p_network_bytes_total",
-				"Total bandwidth usage"
-			).variable_label("direction"),
-			BandwidthCounters(sinks),
-		)?, registry)?;
+		prometheus::register(
+			SourcedCounter::new(
+				&Opts::new("sub_libp2p_network_bytes_total", "Total bandwidth usage")
+					.variable_label("direction"),
+				BandwidthCounters(sinks),
+			)?,
+			registry,
+		)?;
 
 		Ok(())
 	}
@@ -308,13 +295,16 @@ impl MajorSyncingGauge {
 	/// Registers the `MajorSyncGauge` metric whose value is
 	/// obtained from the given `AtomicBool`.
 	fn register(registry: &Registry, value: Arc<AtomicBool>) -> Result<(), PrometheusError> {
-		prometheus::register(SourcedGauge::new(
-			&Opts::new(
-				"sub_libp2p_is_major_syncing",
-				"Whether the node is performing a major sync or not.",
-			),
-			MajorSyncingGauge(value),
-		)?, registry)?;
+		prometheus::register(
+			SourcedGauge::new(
+				&Opts::new(
+					"sub_libp2p_is_major_syncing",
+					"Whether the node is performing a major sync or not.",
+				),
+				MajorSyncingGauge(value),
+			)?,
+			registry,
+		)?;
 
 		Ok(())
 	}
@@ -336,13 +326,13 @@ impl NumConnectedGauge {
 	/// Registers the `MajorSyncingGauge` metric whose value is
 	/// obtained from the given `AtomicUsize`.
 	fn register(registry: &Registry, value: Arc<AtomicUsize>) -> Result<(), PrometheusError> {
-		prometheus::register(SourcedGauge::new(
-			&Opts::new(
-				"sub_libp2p_peers_count",
-				"Number of connected peers",
-			),
-			NumConnectedGauge(value),
-		)?, registry)?;
+		prometheus::register(
+			SourcedGauge::new(
+				&Opts::new("sub_libp2p_peers_count", "Number of connected peers"),
+				NumConnectedGauge(value),
+			)?,
+			registry,
+		)?;
 
 		Ok(())
 	}

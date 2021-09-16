@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,4 +21,3 @@ pub mod check_nonce;
 pub mod check_spec_version;
 pub mod check_tx_version;
 pub mod check_weight;
-

@@ -1,28 +1,28 @@
-// Copyright 2015-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Parity is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2015-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Parity is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Parity.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! The node header.
 
 use crate::trie_constants;
-use codec::{Encode, Decode, Input, Output};
+use codec::{Decode, Encode, Input, Output};
 use sp_std::iter::once;
 
 /// A node header
-#[derive(Copy, Clone, PartialEq, Eq)]
-#[derive(sp_core::RuntimeDebug)]
+#[derive(Copy, Clone, PartialEq, Eq, sp_core::RuntimeDebug)]
 pub(crate) enum NodeHeader {
 	Null,
 	Branch(bool, usize),
@@ -37,10 +37,10 @@ pub(crate) enum NodeKind {
 }
 
 impl Encode for NodeHeader {
-	fn encode_to<T: Output>(&self, output: &mut T) {
+	fn encode_to<T: Output + ?Sized>(&self, output: &mut T) {
 		match self {
 			NodeHeader::Null => output.push_byte(trie_constants::EMPTY_TRIE),
-			NodeHeader::Branch(true, nibble_count)	=>
+			NodeHeader::Branch(true, nibble_count) =>
 				encode_size_and_prefix(*nibble_count, trie_constants::BRANCH_WITH_MASK, output),
 			NodeHeader::Branch(false, nibble_count) =>
 				encode_size_and_prefix(*nibble_count, trie_constants::BRANCH_WITHOUT_MASK, output),
@@ -56,12 +56,14 @@ impl Decode for NodeHeader {
 	fn decode<I: Input>(input: &mut I) -> Result<Self, codec::Error> {
 		let i = input.read_byte()?;
 		if i == trie_constants::EMPTY_TRIE {
-			return Ok(NodeHeader::Null);
+			return Ok(NodeHeader::Null)
 		}
 		match i & (0b11 << 6) {
 			trie_constants::LEAF_PREFIX_MASK => Ok(NodeHeader::Leaf(decode_size(i, input)?)),
-			trie_constants::BRANCH_WITHOUT_MASK => Ok(NodeHeader::Branch(false, decode_size(i, input)?)),
-			trie_constants::BRANCH_WITH_MASK => Ok(NodeHeader::Branch(true, decode_size(i, input)?)),
+			trie_constants::BRANCH_WITHOUT_MASK =>
+				Ok(NodeHeader::Branch(false, decode_size(i, input)?)),
+			trie_constants::BRANCH_WITH_MASK =>
+				Ok(NodeHeader::Branch(true, decode_size(i, input)?)),
 			// do not allow any special encoding
 			_ => Err("Unallowed encoding".into()),
 		}
@@ -75,11 +77,8 @@ pub(crate) fn size_and_prefix_iterator(size: usize, prefix: u8) -> impl Iterator
 	let size = sp_std::cmp::min(trie_constants::NIBBLE_SIZE_BOUND, size);
 
 	let l1 = sp_std::cmp::min(62, size);
-	let (first_byte, mut rem) = if size == l1 {
-		(once(prefix + l1 as u8), 0)
-	} else {
-		(once(prefix + 63), size - l1)
-	};
+	let (first_byte, mut rem) =
+		if size == l1 { (once(prefix + l1 as u8), 0) } else { (once(prefix + 63), size - l1) };
 	let next_bytes = move || {
 		if rem > 0 {
 			if rem < 256 {
@@ -98,7 +97,7 @@ pub(crate) fn size_and_prefix_iterator(size: usize, prefix: u8) -> impl Iterator
 }
 
 /// Encodes size and prefix to a stream output.
-fn encode_size_and_prefix(size: usize, prefix: u8, out: &mut impl Output) {
+fn encode_size_and_prefix<W: Output + ?Sized>(size: usize, prefix: u8, out: &mut W) {
 	for b in size_and_prefix_iterator(size, prefix) {
 		out.push_byte(b)
 	}
@@ -108,13 +107,13 @@ fn encode_size_and_prefix(size: usize, prefix: u8, out: &mut impl Output) {
 fn decode_size(first: u8, input: &mut impl Input) -> Result<usize, codec::Error> {
 	let mut result = (first & 255u8 >> 2) as usize;
 	if result < 63 {
-		return Ok(result);
+		return Ok(result)
 	}
 	result -= 1;
 	while result <= trie_constants::NIBBLE_SIZE_BOUND {
 		let n = input.read_byte()? as usize;
 		if n < 255 {
-			return Ok(result + n + 1);
+			return Ok(result + n + 1)
 		}
 		result += 255;
 	}

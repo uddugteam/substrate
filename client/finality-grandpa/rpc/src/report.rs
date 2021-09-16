@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -44,11 +44,8 @@ where
 	H: Clone + Debug + Eq,
 {
 	fn get(&self) -> (u64, HashSet<AuthorityId>) {
-		let current_voters: HashSet<AuthorityId> = self
-			.current_authorities()
-			.iter()
-			.map(|p| p.0.clone())
-			.collect();
+		let current_voters: HashSet<AuthorityId> =
+			self.current_authorities().iter().map(|p| p.0.clone()).collect();
 
 		(self.set_id(), current_voters)
 	}
@@ -152,10 +149,6 @@ impl ReportedRoundStates {
 			.map(|(round, round_state)| RoundState::from(*round, round_state, &current_voters))
 			.collect::<Result<Vec<_>, Error>>()?;
 
-		Ok(Self {
-			set_id,
-			best,
-			background,
-		})
+		Ok(Self { set_id, best, background })
 	}
 }
