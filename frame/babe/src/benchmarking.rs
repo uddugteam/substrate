@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,8 +23,6 @@ use frame_benchmarking::benchmarks;
 type Header = sp_runtime::generic::Header<u64, sp_runtime::traits::BlakeTwo256>;
 
 benchmarks! {
-	_ {	}
-
 	check_equivocation_proof {
 		let x in 0 .. 1;
 
@@ -71,14 +69,12 @@ benchmarks! {
 mod tests {
 	use super::*;
 	use crate::mock::*;
-	use frame_support::assert_ok;
 
-	#[test]
-	fn test_benchmarks() {
-		new_test_ext(3).execute_with(|| {
-			assert_ok!(test_benchmark_check_equivocation_proof::<Test>());
-		})
-	}
+	frame_benchmarking::impl_benchmark_test_suite!(
+		Pallet,
+		crate::mock::new_test_ext(3),
+		crate::mock::Test,
+	);
 
 	#[test]
 	fn test_generate_equivocation_report_blob() {
@@ -93,14 +89,11 @@ mod tests {
 			let equivocation_proof = generate_equivocation_proof(
 				offending_authority_index,
 				offending_authority_pair,
-				CurrentSlot::get() + 1,
+				CurrentSlot::<Test>::get() + 1,
 			);
 
 			println!("equivocation_proof: {:?}", equivocation_proof);
-			println!(
-				"equivocation_proof.encode(): {:?}",
-				equivocation_proof.encode()
-			);
+			println!("equivocation_proof.encode(): {:?}", equivocation_proof.encode());
 		});
 	}
 }

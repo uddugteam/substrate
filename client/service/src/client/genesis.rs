@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,17 +18,12 @@
 
 //! Tool for creating the genesis block.
 
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, Zero};
+use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, Zero};
 
 /// Create a genesis block, given the initial storage.
-pub fn construct_genesis_block<
-	Block: BlockT
-> (
-	state_root: Block::Hash
-) -> Block {
-	let extrinsics_root = <<<Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
-		Vec::new(),
-	);
+pub fn construct_genesis_block<Block: BlockT>(state_root: Block::Hash) -> Block {
+	let extrinsics_root =
+		<<<Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(Vec::new());
 
 	Block::new(
 		<<Block as BlockT>::Header as HeaderT>::new(
@@ -36,8 +31,8 @@ pub fn construct_genesis_block<
 			extrinsics_root,
 			state_root,
 			Default::default(),
-			Default::default()
+			Default::default(),
 		),
-		Default::default()
+		Default::default(),
 	)
 }

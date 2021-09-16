@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,11 +18,18 @@
 
 #![cfg(unix)]
 
-use std::{process::{Child, ExitStatus}, thread, time::Duration, path::Path};
 use assert_cmd::cargo::cargo_bin;
-use std::{convert::TryInto, process::Command};
-use nix::sys::signal::{kill, Signal::SIGINT};
-use nix::unistd::Pid;
+use nix::{
+	sys::signal::{kill, Signal::SIGINT},
+	unistd::Pid,
+};
+use std::{
+	convert::TryInto,
+	path::Path,
+	process::{Child, Command, ExitStatus},
+	thread,
+	time::Duration,
+};
 
 /// Wait for the given `child` the given number of `secs`.
 ///
@@ -47,15 +54,10 @@ pub fn wait_for(child: &mut Child, secs: usize) -> Option<ExitStatus> {
 }
 
 /// Run the node for a while (30 seconds)
-pub fn run_dev_node_for_a_while(base_path: &Path) {
+pub fn run_node_for_a_while(base_path: &Path, args: &[&str]) {
 	let mut cmd = Command::new(cargo_bin("substrate"));
 
-	let mut cmd = cmd
-		.args(&["--dev"])
-		.arg("-d")
-		.arg(base_path)
-		.spawn()
-		.unwrap();
+	let mut cmd = cmd.args(args).arg("-d").arg(base_path).spawn().unwrap();
 
 	// Let it produce some blocks.
 	thread::sleep(Duration::from_secs(30));
@@ -64,4 +66,15 @@ pub fn run_dev_node_for_a_while(base_path: &Path) {
 	// Stop the process
 	kill(Pid::from_raw(cmd.id().try_into().unwrap()), SIGINT).unwrap();
 	assert!(wait_for(&mut cmd, 40).map(|x| x.success()).unwrap_or_default());
+}
+
+/// Run the node asserting that it fails with an error
+pub fn run_node_assert_fail(base_path: &Path, args: &[&str]) {
+	let mut cmd = Command::new(cargo_bin("substrate"));
+
+	let mut cmd = cmd.args(args).arg("-d").arg(base_path).spawn().unwrap();
+
+	// Let it produce some blocks.
+	thread::sleep(Duration::from_secs(10));
+	assert!(cmd.try_wait().unwrap().is_some(), "the process should not be running anymore");
 }

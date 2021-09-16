@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,11 +17,8 @@
 
 //! Different types of changes trie input pairs.
 
-use codec::{Decode, Encode, Input, Output, Error};
-use crate::{
-	StorageKey, StorageValue,
-	changes_trie::BlockNumber
-};
+use crate::{changes_trie::BlockNumber, StorageKey, StorageValue};
+use codec::{Decode, Encode, Error, Input, Output};
 use sp_core::storage::PrefixedStorageKey;
 
 /// Key of { changed key => set of extrinsic indices } mapping.
@@ -66,9 +63,11 @@ pub type ChildIndexValue = Vec<u8>;
 pub enum InputPair<Number: BlockNumber> {
 	/// Element of { key => set of extrinsics where key has been changed } element mapping.
 	ExtrinsicIndex(ExtrinsicIndex<Number>, ExtrinsicIndexValue),
-	/// Element of { key => set of blocks/digest blocks where key has been changed } element mapping.
+	/// Element of { key => set of blocks/digest blocks where key has been changed } element
+	/// mapping.
 	DigestIndex(DigestIndex<Number>, DigestIndexValue<Number>),
-	/// Element of { childtrie key => Childchange trie } where key has been changed } element mapping.
+	/// Element of { childtrie key => Childchange trie } where key has been changed } element
+	/// mapping.
 	ChildIndex(ChildIndex<Number>, ChildIndexValue),
 }
 
@@ -123,7 +122,7 @@ impl<Number: BlockNumber> ExtrinsicIndex<Number> {
 }
 
 impl<Number: BlockNumber> Encode for ExtrinsicIndex<Number> {
-	fn encode_to<W: Output>(&self, dest: &mut W) {
+	fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
 		dest.push_byte(1);
 		self.block.encode_to(dest);
 		self.key.encode_to(dest);
@@ -140,9 +139,8 @@ impl<Number: BlockNumber> DigestIndex<Number> {
 	}
 }
 
-
 impl<Number: BlockNumber> Encode for DigestIndex<Number> {
-	fn encode_to<W: Output>(&self, dest: &mut W) {
+	fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
 		dest.push_byte(2);
 		self.block.encode_to(dest);
 		self.key.encode_to(dest);
@@ -158,7 +156,7 @@ impl<Number: BlockNumber> ChildIndex<Number> {
 }
 
 impl<Number: BlockNumber> Encode for ChildIndex<Number> {
-	fn encode_to<W: Output>(&self, dest: &mut W) {
+	fn encode_to<W: Output + ?Sized>(&self, dest: &mut W) {
 		dest.push_byte(3);
 		self.block.encode_to(dest);
 		self.storage_key.encode_to(dest);

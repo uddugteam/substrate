@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,7 +20,7 @@
 
 use sp_std::vec::Vec;
 
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
 use sp_runtime::Perbill;
 
 use crate::SessionIndex;
@@ -84,10 +84,7 @@ pub trait Offence<Offender> {
 	///
 	/// `offenders_count` - the count of unique offending authorities. It is >0.
 	/// `validator_set_count` - the cardinality of the validator set at the time of offence.
-	fn slash_fraction(
-		offenders_count: u32,
-		validator_set_count: u32,
-	) -> Perbill;
+	fn slash_fraction(offenders_count: u32, validator_set_count: u32) -> Perbill;
 }
 
 /// Errors that may happen on offence reports.
@@ -108,7 +105,7 @@ impl sp_runtime::traits::Printable for OffenceError {
 			Self::Other(e) => {
 				"Other".print();
 				e.print();
-			}
+			},
 		}
 	}
 }
@@ -159,13 +156,7 @@ pub trait OnOffenceHandler<Reporter, Offender, Res> {
 		offenders: &[OffenceDetails<Reporter, Offender>],
 		slash_fraction: &[Perbill],
 		session: SessionIndex,
-	) -> Result<Res, ()>;
-
-	/// Can an offence be reported now or not. This is an method to short-circuit a call into
-	/// `on_offence`. Ideally, a correct implementation should return `false` if `on_offence` will
-	/// return `Err`. Nonetheless, this is up to the implementation and this trait cannot guarantee
-	/// it.
-	fn can_report() -> bool;
+	) -> Res;
 }
 
 impl<Reporter, Offender, Res: Default> OnOffenceHandler<Reporter, Offender, Res> for () {
@@ -173,15 +164,13 @@ impl<Reporter, Offender, Res: Default> OnOffenceHandler<Reporter, Offender, Res>
 		_offenders: &[OffenceDetails<Reporter, Offender>],
 		_slash_fraction: &[Perbill],
 		_session: SessionIndex,
-	) -> Result<Res, ()> {
-		Ok(Default::default())
+	) -> Res {
+		Default::default()
 	}
-
-	fn can_report() -> bool { true }
 }
 
 /// A details about an offending authority for a particular kind of offence.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug, scale_info::TypeInfo)]
 pub struct OffenceDetails<Reporter, Offender> {
 	/// The offending authority id
 	pub offender: Offender,

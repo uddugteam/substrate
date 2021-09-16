@@ -1,28 +1,31 @@
-// Copyright 2015-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Parity is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2015-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Parity is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Parity.  If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 //! `TrieStream` implementation for Substrate's trie format.
 
-use hash_db::Hasher;
-use trie_root;
+use crate::{
+	node_codec::Bitmap,
+	node_header::{size_and_prefix_iterator, NodeKind},
+	trie_constants,
+};
 use codec::Encode;
+use hash_db::Hasher;
 use sp_std::vec::Vec;
-use crate::trie_constants;
-use crate::node_header::{NodeKind, size_and_prefix_iterator};
-use crate::node_codec::Bitmap;
+use trie_root;
 
 const BRANCH_NODE_NO_VALUE: u8 = 254;
 const BRANCH_NODE_WITH_VALUE: u8 = 255;
@@ -35,19 +38,22 @@ pub struct TrieStream {
 
 impl TrieStream {
 	// useful for debugging but not used otherwise
-	pub fn as_raw(&self) -> &[u8] { &self.buffer }
+	pub fn as_raw(&self) -> &[u8] {
+		&self.buffer
+	}
 }
 
 fn branch_node_bit_mask(has_children: impl Iterator<Item = bool>) -> (u8, u8) {
 	let mut bitmap: u16 = 0;
 	let mut cursor: u16 = 1;
 	for v in has_children {
-		if v { bitmap |= cursor }
+		if v {
+			bitmap |= cursor
+		}
 		cursor <<= 1;
 	}
-	((bitmap % 256 ) as u8, (bitmap / 256 ) as u8)
+	((bitmap % 256) as u8, (bitmap / 256) as u8)
 }
-
 
 /// Create a leaf/branch node, encoding a number of nibbles.
 fn fuse_nibbles_node<'a>(nibbles: &'a [u8], kind: NodeKind) -> impl Iterator<Item = u8> + 'a {
@@ -55,21 +61,19 @@ fn fuse_nibbles_node<'a>(nibbles: &'a [u8], kind: NodeKind) -> impl Iterator<Ite
 
 	let iter_start = match kind {
 		NodeKind::Leaf => size_and_prefix_iterator(size, trie_constants::LEAF_PREFIX_MASK),
-		NodeKind::BranchNoValue => size_and_prefix_iterator(size, trie_constants::BRANCH_WITHOUT_MASK),
-		NodeKind::BranchWithValue => size_and_prefix_iterator(size, trie_constants::BRANCH_WITH_MASK),
+		NodeKind::BranchNoValue =>
+			size_and_prefix_iterator(size, trie_constants::BRANCH_WITHOUT_MASK),
+		NodeKind::BranchWithValue =>
+			size_and_prefix_iterator(size, trie_constants::BRANCH_WITH_MASK),
 	};
 	iter_start
 		.chain(if nibbles.len() % 2 == 1 { Some(nibbles[0]) } else { None })
 		.chain(nibbles[nibbles.len() % 2..].chunks(2).map(|ch| ch[0] << 4 | ch[1]))
 }
 
-
 impl trie_root::TrieStream for TrieStream {
-
 	fn new() -> Self {
-		TrieStream {
-			buffer: Vec::new()
-		}
+		TrieStream { buffer: Vec::new() }
 	}
 
 	fn append_empty_data(&mut self) {
@@ -94,7 +98,7 @@ impl trie_root::TrieStream for TrieStream {
 				self.buffer.extend(fuse_nibbles_node(partial, NodeKind::BranchNoValue));
 			}
 			let bm = branch_node_bit_mask(has_children);
-			self.buffer.extend([bm.0,bm.1].iter());
+			self.buffer.extend([bm.0, bm.1].iter());
 		} else {
 			debug_assert!(false, "trie stream codec only for no extension trie");
 			self.buffer.extend(&branch_node(maybe_value.is_some(), has_children));
@@ -116,7 +120,9 @@ impl trie_root::TrieStream for TrieStream {
 		}
 	}
 
-	fn out(self) -> Vec<u8> { self.buffer }
+	fn out(self) -> Vec<u8> {
+		self.buffer
+	}
 }
 
 fn branch_node(has_value: bool, has_children: impl Iterator<Item = bool>) -> [u8; 3] {
@@ -125,15 +131,11 @@ fn branch_node(has_value: bool, has_children: impl Iterator<Item = bool>) -> [u8
 	result
 }
 
-fn branch_node_buffered<I>(has_value: bool, has_children: I, output: &mut[u8])
-	where
-		I: Iterator<Item = bool>,
+fn branch_node_buffered<I>(has_value: bool, has_children: I, output: &mut [u8])
+where
+	I: Iterator<Item = bool>,
 {
-	let first = if has_value {
-		BRANCH_NODE_WITH_VALUE
-	} else {
-		BRANCH_NODE_NO_VALUE
-	};
+	let first = if has_value { BRANCH_NODE_WITH_VALUE } else { BRANCH_NODE_NO_VALUE };
 	output[0] = first;
 	Bitmap::encode(has_children, &mut output[1..]);
 }

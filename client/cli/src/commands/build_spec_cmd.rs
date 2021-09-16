@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,18 +16,22 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::error;
-use crate::params::NodeKeyParams;
-use crate::params::SharedParams;
-use crate::CliConfiguration;
+use crate::{
+	error,
+	params::{NodeKeyParams, SharedParams},
+	CliConfiguration,
+};
 use log::info;
 use sc_network::config::build_multiaddr;
-use sc_service::{config::{MultiaddrWithPeerId, NetworkConfiguration}, ChainSpec};
-use structopt::StructOpt;
+use sc_service::{
+	config::{MultiaddrWithPeerId, NetworkConfiguration},
+	ChainSpec,
+};
 use std::io::Write;
+use structopt::StructOpt;
 
 /// The `build-spec` command used to build a specification.
-#[derive(Debug, StructOpt)]
+#[derive(Debug, StructOpt, Clone)]
 pub struct BuildSpecCmd {
 	/// Force raw genesis storage output.
 	#[structopt(long = "raw")]

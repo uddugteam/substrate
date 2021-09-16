@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,14 +19,12 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use super::{*, Module as Grandpa};
+use super::{Pallet as Grandpa, *};
 use frame_benchmarking::benchmarks;
 use frame_system::RawOrigin;
 use sp_core::H256;
 
 benchmarks! {
-	_ {	}
-
 	check_equivocation_proof {
 		let x in 0 .. 1;
 
@@ -65,8 +63,8 @@ benchmarks! {
 	}
 
 	note_stalled {
-		let delay = 1000.into();
-		let best_finalized_block_number = 1.into();
+		let delay = 1000u32.into();
+		let best_finalized_block_number = 1u32.into();
 
 	}: _(RawOrigin::Root, delay, best_finalized_block_number)
 	verify {
@@ -78,15 +76,12 @@ benchmarks! {
 mod tests {
 	use super::*;
 	use crate::mock::*;
-	use frame_support::assert_ok;
 
-	#[test]
-	fn test_benchmarks() {
-		new_test_ext(vec![(1, 1), (2, 1), (3, 1)]).execute_with(|| {
-			assert_ok!(test_benchmark_check_equivocation_proof::<Test>());
-			assert_ok!(test_benchmark_note_stalled::<Test>());
-		})
-	}
+	frame_benchmarking::impl_benchmark_test_suite!(
+		Pallet,
+		crate::mock::new_test_ext(vec![(1, 1), (2, 1), (3, 1)]),
+		crate::mock::Test,
+	);
 
 	#[test]
 	fn test_generate_equivocation_report_blob() {
@@ -108,10 +103,7 @@ mod tests {
 			);
 
 			println!("equivocation_proof: {:?}", equivocation_proof);
-			println!(
-				"equivocation_proof.encode(): {:?}",
-				equivocation_proof.encode()
-			);
+			println!("equivocation_proof.encode(): {:?}", equivocation_proof.encode());
 		});
 	}
 }
