@@ -17,7 +17,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 name = "node-template"
 
 [dependencies]
-ipfs = { git = "https://github.com/rs-ipfs/rust-ipfs", tag = "ipfs@v0.2.0" }
+ipfs = { git = "https://github.com/rs-ipfs/rust-ipfs"}
 structopt = "0.3.8"
 
 sc-cli = { version = "0.10.0-dev", path = "../../../client/cli", features = ["wasmtime"] }

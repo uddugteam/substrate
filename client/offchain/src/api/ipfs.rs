@@ -22,7 +22,7 @@ use std::{collections::BTreeMap, convert::TryInto, fmt, mem, pin::Pin, str, task
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
 
 // wasm-friendly implementations of Ipfs::{add, get}
-async fn ipfs_add<T: IpfsTypes>(ipfs: &Ipfs<T>, data: Vec<u8>) -> Result<Cid, ipfs::Error> {
+async fn ipfs_add<T: IpfsTypes>(ipfs: &Ipfs<T>, data: Vec<u8>) -> Result<ipfs::Cid, Error> {
     let dag = ipfs.dag();
 
     let links: Vec<Ipld> = vec![];
@@ -550,7 +550,7 @@ mod tests {
         let mut rt = tokio::runtime::Runtime::new().unwrap();
         let ipfs_node = rt.block_on(async move {
             let (ipfs, fut): (Ipfs<ipfs::TestTypes>, _) =
-                ipfs::UninitializedIpfs::new(options, None).await.start().await.unwrap();
+                ipfs::UninitializedIpfs::new(options).await.start().await.unwrap();
             tokio::task::spawn(fut);
             ipfs
         });
