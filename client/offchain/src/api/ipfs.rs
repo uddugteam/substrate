@@ -19,10 +19,10 @@ use ipfs::{
 use log::error;
 use sp_core::offchain::{IpfsRequest, IpfsRequestId, IpfsRequestStatus, IpfsResponse, OpaqueMultiaddr, Timestamp};
 use std::{collections::BTreeMap, convert::TryInto, fmt, mem, pin::Pin, str, task::{Context, Poll}};
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedSender, TracingUnboundedReceiver};
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 
 // wasm-friendly implementations of Ipfs::{add, get}
-async fn ipfs_add<T: IpfsTypes>(ipfs: &Ipfs<T>, data: Vec<u8>) -> Result<ipfs::Cid, Error> {
+async fn ipfs_add<T: IpfsTypes>(ipfs: &Ipfs<T>, data: Vec<u8>) -> Result<ipfs::Cid, ipfs::Error> {
     let dag = ipfs.dag();
 
     let links: Vec<Ipld> = vec![];
@@ -297,7 +297,7 @@ impl From<IpfsNativeResponse> for IpfsResponse {
                 let mut ret = Vec::with_capacity(resp.len());
 
                 for (peer_id, addrs) in resp {
-                    let peer = peer_id.as_ref().to_vec();
+                    let peer = peer_id.to_bytes();
                     let mut converted_addrs = Vec::with_capacity(addrs.len());
 
                     for addr in addrs {
@@ -329,7 +329,7 @@ impl From<IpfsNativeResponse> for IpfsResponse {
                     data_received,
                     dup_blks_received,
                     dup_data_received,
-                    peers: peers.into_iter().map(|peer_id| peer_id.as_ref().to_vec()).collect(),
+                    peers: peers.into_iter().map(|peer_id| peer_id.to_bytes()).collect(),
                     wantlist: wantlist.into_iter().map(|(cid, prio)| (cid.to_bytes(), prio)).collect(),
                 }
             }
@@ -355,7 +355,7 @@ impl From<IpfsNativeResponse> for IpfsResponse {
                 IpfsResponse::FindPeer(addrs)
             },
             IpfsNativeResponse::Identity(pk, addrs) => {
-                let pk = pk.into_peer_id().as_ref().to_vec();
+                let pk = pk.into_peer_id().to_bytes();
                 let addrs = addrs.into_iter().map(|addr|
                     OpaqueMultiaddr(addr.to_string().into_bytes())
                 ).collect();

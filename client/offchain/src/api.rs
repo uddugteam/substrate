@@ -339,10 +339,11 @@ impl<I: ::ipfs::IpfsTypes> AsyncApi<I> {
 
 	/// Run a processing task for the API
 	pub fn process(mut self) -> impl Future<Output = ()> {
-		let http = self.http.take().expect("Take invoked only once.");
+		// let http = self.http.take().expect("Take invoked only once.");
 		let ipfs = self.ipfs.take().expect("Take invoked only once.");
 
-		futures::join!(http, ipfs);
+		// (http, ipfs)
+		ipfs
 	}
 }
 

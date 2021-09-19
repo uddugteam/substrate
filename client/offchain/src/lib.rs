@@ -96,7 +96,7 @@ impl<Client, Block: traits::Block> OffchainWorkers<Client, Block> {
 		let shared_client = api::SharedClient::new();
 
 		let (ipfs_node, node_info) = std::thread::spawn(move || {
-		let mut ipfs_rt = ipfs_rt.lock();
+		let ipfs_rt = ipfs_rt.lock();
 		let options = ipfs::IpfsOptions::inmemory_with_generated_keys();
 		ipfs_rt.block_on(async move {
 		// Start daemon and initialize repo

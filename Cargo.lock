@@ -8189,7 +8189,7 @@ name = "sc-offchain"
 version = "4.0.0-dev"
 dependencies = [
  "bytes 1.1.0",
- "cid 0.6.1",
+ "cid 0.5.1",
  "fnv",
  "futures 0.3.17",
  "futures-timer 3.0.2",
