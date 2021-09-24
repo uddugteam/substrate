@@ -168,12 +168,13 @@ where
 
 
 	// offchain workers
-	/*sc_service::build_offchain_workers(
+	sc_service::build_offchain_workers(
 		&config,
 		task_manager.spawn_handle(),
 		client.clone(),
 		network.clone(),
-	);*/
+		task_manager.ipfs_rt.clone(),
+	);
 
 	// Proposer object for block authorship.
 	let env = sc_basic_authorship::ProposerFactory::new(

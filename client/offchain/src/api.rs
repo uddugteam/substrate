@@ -20,7 +20,6 @@ use std::{collections::HashSet, convert::TryFrom, str::FromStr, sync::Arc, threa
 
 use crate::NetworkProvider;
 use codec::{Decode, Encode};
-use futures::Future;
 pub use http::SharedClient;
 use sc_network::{Multiaddr, PeerId};
 use sp_core::{
@@ -338,12 +337,10 @@ impl<I: ::ipfs::IpfsTypes> AsyncApi<I> {
 	}
 
 	/// Run a processing task for the API
-	pub fn process(mut self) -> impl Future<Output = ()> {
-		// let http = self.http.take().expect("Take invoked only once.");
+	pub async fn process(mut self) {
+		let http = self.http.take().expect("Take invoked only once.");
 		let ipfs = self.ipfs.take().expect("Take invoked only once.");
-
-		// (http, ipfs)
-		ipfs
+		futures::join!(http, ipfs);
 	}
 }
 
