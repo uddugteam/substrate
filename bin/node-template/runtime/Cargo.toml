@@ -13,7 +13,6 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 
 pallet-aura = { version = "4.0.0-dev", default-features = false, path = "../../../frame/aura" }
 pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../../frame/balances" }
@@ -47,6 +46,7 @@ frame-system-benchmarking = { version = "4.0.0-dev", default-features = false, p
 hex-literal = { version = "0.3.1", optional = true }
 
 pallet-template = { version = "3.0.0", default-features = false, path = "../pallets/template" }
+log = { version = "0.4.14", default-features = false }
 
 [build-dependencies]
 substrate-wasm-builder = { version = "5.0.0-dev", path = "../../../utils/wasm-builder" }
@@ -55,7 +55,6 @@ substrate-wasm-builder = { version = "5.0.0-dev", path = "../../../utils/wasm-bu
 default = ["std"]
 std = [
 	"codec/std",
-	"scale-info/std",
 	"frame-executive/std",
 	"frame-support/std",
 	"frame-system-rpc-runtime-api/std",

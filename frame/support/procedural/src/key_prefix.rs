@@ -48,7 +48,7 @@ pub fn impl_key_prefix_for_tuples(input: proc_macro::TokenStream) -> Result<Toke
 
 			let trait_impls = quote! {
 				impl<
-					#(#current_tuple: FullCodec + StaticTypeInfo,)*
+					#(#current_tuple: FullCodec,)*
 					#(#hashers: StorageHasher,)*
 					#(#kargs: EncodeLike<#prefixes>),*
 				> HasKeyPrefix<( #( #kargs, )* )> for ( #( Key<#hashers, #current_tuple>, )* ) {
@@ -60,7 +60,7 @@ pub fn impl_key_prefix_for_tuples(input: proc_macro::TokenStream) -> Result<Toke
 				}
 
 				impl<
-					#(#current_tuple: FullCodec + StaticTypeInfo,)*
+					#(#current_tuple: FullCodec,)*
 					#(#hashers: ReversibleStorageHasher,)*
 					#(#kargs: EncodeLike<#prefixes>),*
 				> HasReversibleKeyPrefix<( #( #kargs, )* )> for ( #( Key<#hashers, #current_tuple>, )* ) {

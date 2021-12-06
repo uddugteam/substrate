@@ -47,7 +47,6 @@ use crate::{
 	hash::{H256, H512},
 };
 use codec::{Decode, Encode, MaxEncodedLen};
-use scale_info::TypeInfo;
 use sp_std::ops::Deref;
 
 #[cfg(feature = "full_crypto")]
@@ -66,18 +65,7 @@ pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"sr25");
 /// An Schnorrkel/Ristretto x25519 ("sr25519") public key.
 #[cfg_attr(feature = "full_crypto", derive(Hash))]
 #[derive(
-	PartialEq,
-	Eq,
-	PartialOrd,
-	Ord,
-	Clone,
-	Copy,
-	Encode,
-	Decode,
-	Default,
-	PassByInner,
-	MaxEncodedLen,
-	TypeInfo,
+	PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Encode, Decode, Default, PassByInner, MaxEncodedLen,
 )]
 pub struct Public(pub [u8; 32]);
 
@@ -213,7 +201,7 @@ impl<'de> Deserialize<'de> for Public {
 /// An Schnorrkel/Ristretto x25519 ("sr25519") signature.
 ///
 /// Instead of importing it for the local module, alias it to be available as a public type
-#[derive(Encode, Decode, PassByInner, TypeInfo)]
+#[derive(Encode, Decode, PassByInner)]
 pub struct Signature(pub [u8; 64]);
 
 impl sp_std::convert::TryFrom<&[u8]> for Signature {

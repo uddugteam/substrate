@@ -363,17 +363,7 @@ macro_rules! implement_fixed {
 		/// A fixed point number representation in the range.
 		#[doc = $title]
 		#[derive(
-			Encode,
-			Decode,
-			CompactAs,
-			Default,
-			Copy,
-			Clone,
-			PartialEq,
-			Eq,
-			PartialOrd,
-			Ord,
-			scale_info::TypeInfo,
+			Encode, Decode, CompactAs, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord,
 		)]
 		pub struct $name($inner_type);
 

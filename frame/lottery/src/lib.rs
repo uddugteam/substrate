@@ -76,7 +76,7 @@ type BalanceOf<T> =
 // We use this to uniquely match someone's incoming call with the calls configured for the lottery.
 type CallIndex = (u8, u8);
 
-#[derive(Encode, Decode, Default, Eq, PartialEq, RuntimeDebug, scale_info::TypeInfo)]
+#[derive(Encode, Decode, Default, Eq, PartialEq, RuntimeDebug)]
 pub struct LotteryConfig<BlockNumber, Balance> {
 	/// Price per entry.
 	price: Balance,

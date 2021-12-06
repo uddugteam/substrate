@@ -13,7 +13,7 @@ mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
 
-	#[derive(Encode, Decode, scale_info::TypeInfo)]
+	#[derive(Encode, Decode)]
 	struct Bar;
 
 	#[pallet::call]

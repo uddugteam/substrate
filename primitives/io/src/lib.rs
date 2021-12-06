@@ -49,8 +49,8 @@ use sp_core::{
 	crypto::KeyTypeId,
 	ecdsa, ed25519,
 	offchain::{
-		Timestamp, HttpRequestId, HttpRequestStatus, HttpError, IpfsRequest,
-		IpfsRequestId, IpfsRequestStatus, StorageKind, OpaqueNetworkState,
+		HttpError, HttpRequestId, HttpRequestStatus, OpaqueNetworkState, StorageKind, Timestamp,
+		IpfsRequest, IpfsRequestId, IpfsRequestStatus,
 	},
 	sr25519, LogLevel, LogLevelFilter, OpaquePeerId, H256,
 };
@@ -1134,23 +1134,23 @@ pub trait Offchain {
 			.map(|r| r as u32)
 	}
 
-	/// Initiates an IPFS request
-	fn ipfs_request_start(&mut self, request: IpfsRequest) -> Result<IpfsRequestId, ()> {
-		self.extension::<OffchainWorkerExt>()
-			.expect("ipfs_request_start can be called only in the offchain worker context")
-			.ipfs_request_start(request)
-	}
-
-	/// Block and wait for the responses for given requests.
-	fn ipfs_response_wait(
-		&mut self,
-		ids: &[IpfsRequestId],
-		deadline: Option<Timestamp>,
-	) -> Vec<IpfsRequestStatus> {
-		self.extension::<OffchainWorkerExt>()
-			.expect("ipfs_response_wait can be called only in the offchain worker context")
-			.ipfs_response_wait(ids, deadline)
-	}
+		/// Initiates an IPFS request
+		fn ipfs_request_start(&mut self, request: IpfsRequest) -> Result<IpfsRequestId, ()> {
+			self.extension::<OffchainWorkerExt>()
+				.expect("ipfs_request_start can be called only in the offchain worker context")
+				.ipfs_request_start(request)
+		}
+	
+		/// Block and wait for the responses for given requests.
+		fn ipfs_response_wait(
+			&mut self,
+			ids: &[IpfsRequestId],
+			deadline: Option<Timestamp>,
+		) -> Vec<IpfsRequestStatus> {
+			self.extension::<OffchainWorkerExt>()
+				.expect("ipfs_response_wait can be called only in the offchain worker context")
+				.ipfs_response_wait(ids, deadline)
+		}
 
 	/// Set the authorized nodes and authorized_only flag.
 	fn set_authorized_nodes(&mut self, nodes: Vec<OpaquePeerId>, authorized_only: bool) {

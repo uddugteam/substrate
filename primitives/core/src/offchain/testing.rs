@@ -22,21 +22,10 @@
 
 use crate::{
 	offchain::{
-		self,
-		storage::InMemOffchainStorage,
-		HttpError,
-		HttpRequestId as RequestId,
-		HttpRequestStatus as RequestStatus,
-		OffchainOverlayedChange,
-		OffchainStorage,
-		OpaqueNetworkState,
-		StorageKind,
-		Timestamp,
-		TransactionPool,
-		IpfsRequest,
-		IpfsRequestId,
-		IpfsRequestStatus,
-		IpfsResponse,
+		self, storage::InMemOffchainStorage, HttpError, HttpRequestId as RequestId,
+		HttpRequestStatus as RequestStatus, OffchainOverlayedChange, OffchainStorage,
+		OpaqueNetworkState, StorageKind, Timestamp, TransactionPool,
+		IpfsRequest, IpfsRequestId, IpfsRequestStatus, IpfsResponse,
 	},
 	OpaquePeerId,
 };
@@ -47,7 +36,7 @@ use std::{
 
 use parking_lot::RwLock;
 
-/// Pending HTTP request.
+/// Pending request.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct PendingRequest {
 	/// HTTP method
@@ -68,6 +57,13 @@ pub struct PendingRequest {
 	pub read: usize,
 	/// Response headers
 	pub response_headers: Vec<(String, String)>,
+}
+
+/// Pending IPFS request.
+#[derive(Debug, PartialEq, Eq)]
+pub struct IpfsPendingRequest {
+	/// Request id
+	pub id: IpfsRequestId,
 }
 
 /// Sharable "persistent" offchain storage for test.
@@ -129,24 +125,18 @@ impl OffchainStorage for TestPersistentOffchainDB {
 	}
 }
 
-/// Pending IPFS request.
-#[derive(Debug, PartialEq, Eq)]
-pub struct IpfsPendingRequest {
-	/// Request id
-	pub id: IpfsRequestId,
-}
-
 /// Internal state of the externalities.
 ///
 /// This can be used in tests to respond or assert stuff about interactions.
 #[derive(Debug, Default)]
 pub struct OffchainState {
-	/// A list of pending HTTP requests.
+	/// A list of pending requests.
 	pub requests: BTreeMap<RequestId, PendingRequest>,
 	// Queue of requests that the test is expected to perform (in order).
 	expected_requests: VecDeque<PendingRequest>,
-	/// A list of pending IPFS requests.
+	/// List of pending IPFS requests
 	pub ipfs_requests: BTreeMap<IpfsRequestId, IpfsPendingRequest>,
+	/// Map of  requests that the test is expected to perform
 	expected_ipfs_requests: BTreeMap<IpfsRequestId, IpfsPendingRequest>,
 	/// Persistent local storage
 	pub persistent_storage: TestPersistentOffchainDB,

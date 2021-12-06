@@ -53,7 +53,7 @@ sp_api::decl_runtime_apis! {
 pub type ValidatorCount = u32;
 
 /// Proof of membership of a specific key in a given session.
-#[derive(Encode, Decode, Clone, Eq, PartialEq, Default, RuntimeDebug, scale_info::TypeInfo)]
+#[derive(Encode, Decode, Clone, Eq, PartialEq, Default, RuntimeDebug)]
 pub struct MembershipProof {
 	/// The session index on which the specific key is a member.
 	pub session: SessionIndex,

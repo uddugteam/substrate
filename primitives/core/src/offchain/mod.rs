@@ -19,7 +19,6 @@
 
 use crate::{OpaquePeerId, RuntimeDebug};
 use codec::{Decode, Encode};
-use scale_info::TypeInfo;
 use sp_runtime_interface::pass_by::{PassByCodec, PassByEnum, PassByInner};
 use sp_std::{
 	convert::TryFrom,
@@ -187,7 +186,7 @@ impl TryFrom<u32> for HttpRequestStatus {
 
 /// A blob to hold information about the local node's network state
 /// without committing to its format.
-#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, PassByCodec, TypeInfo)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, PassByCodec)]
 #[cfg_attr(feature = "std", derive(Default))]
 pub struct OpaqueNetworkState {
 	/// PeerId of the local node in SCALE encoded.
@@ -197,7 +196,7 @@ pub struct OpaqueNetworkState {
 }
 
 /// Simple blob to hold a `Multiaddr` without committing to its format.
-#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, PassByInner, TypeInfo)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, PassByInner)]
 pub struct OpaqueMultiaddr(pub Vec<u8>);
 
 impl OpaqueMultiaddr {
@@ -419,7 +418,7 @@ pub enum Capability {
 	OffchainDbWrite = 64,
 	/// Manage the authorized nodes
 	NodeAuthorization = 128,
-	/// Access to an IPFS node.
+	/// Access to an ipfs node
 	Ipfs = 255,
 }
 
@@ -686,10 +685,14 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 	}
 
 	fn ipfs_request_start(&mut self, request: IpfsRequest) -> Result<IpfsRequestId, ()> {
+		// self.check(Capability::Ipfs, "ipfs_request_start");
+		// self.externalities.ipfs_request_start(request)
 		(&mut **self).ipfs_request_start(request)
 	}
 
 	fn ipfs_response_wait(&mut self, ids: &[IpfsRequestId], deadline: Option<Timestamp>) -> Vec<IpfsRequestStatus> {
+		// self.check(Capability::Ipfs, "ipfs_response_wait");
+		// self.externalities.ipfs_response_wait(ids, deadline)
 		(&mut **self).ipfs_response_wait(ids, deadline)
 	}
 
@@ -799,7 +802,7 @@ impl<T: Externalities> Externalities for LimitedExternalities<T> {
 		self.check(Capability::Http, "http_response_read_body");
 		self.externalities.http_response_read_body(request_id, buffer, deadline)
 	}
-
+	
 	fn ipfs_request_start(&mut self, request: IpfsRequest) -> Result<IpfsRequestId, ()> {
 		self.check(Capability::Ipfs, "ipfs_request_start");
 		self.externalities.ipfs_request_start(request)

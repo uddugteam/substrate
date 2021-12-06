@@ -16,9 +16,7 @@
 // limitations under the License.
 
 use super::{Config, OffenceDetails, Perbill, SessionIndex};
-use frame_support::{
-	generate_storage_alias, pallet_prelude::ValueQuery, traits::Get, weights::Weight,
-};
+use frame_support::{generate_storage_alias, traits::Get, weights::Weight};
 use sp_staking::offence::OnOffenceHandler;
 use sp_std::vec::Vec;
 
@@ -33,7 +31,7 @@ type DeferredOffenceOf<T> = (
 // at a later time.
 generate_storage_alias!(
 	Offences,
-	DeferredOffences<T: Config> => Value<Vec<DeferredOffenceOf<T>>, ValueQuery>
+	DeferredOffences<T: Config> => Value<Vec<DeferredOffenceOf<T>>>
 );
 
 pub fn remove_deferred_storage<T: Config>() -> Weight {

@@ -16,7 +16,6 @@
 // limitations under the License.
 
 use super::helper;
-use frame_support_procedural_tools::get_doc_literals;
 use quote::ToTokens;
 use syn::spanned::Spanned;
 
@@ -81,7 +80,7 @@ impl ErrorDef {
 					return Err(syn::Error::new(span, msg))
 				}
 
-				Ok((variant.ident.clone(), get_doc_literals(&variant.attrs)))
+				Ok((variant.ident.clone(), helper::get_doc_literals(&variant.attrs)))
 			})
 			.collect::<Result<_, _>>()?;
 

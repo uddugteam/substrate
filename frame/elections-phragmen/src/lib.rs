@@ -108,7 +108,6 @@ use frame_support::{
 	},
 	weights::Weight,
 };
-use scale_info::TypeInfo;
 use sp_npos_elections::{ElectionResult, ExtendedBalance};
 use sp_runtime::{
 	traits::{Saturating, StaticLookup, Zero},
@@ -136,7 +135,7 @@ type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 >>::NegativeImbalance;
 
 /// An indication that the renouncing account currently has which of the below roles.
-#[derive(Encode, Decode, Clone, PartialEq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, RuntimeDebug)]
 pub enum Renouncing {
 	/// A member is renouncing.
 	Member,
@@ -147,7 +146,7 @@ pub enum Renouncing {
 }
 
 /// An active voter.
-#[derive(Encode, Decode, Clone, Default, RuntimeDebug, PartialEq, TypeInfo)]
+#[derive(Encode, Decode, Clone, Default, RuntimeDebug, PartialEq)]
 pub struct Voter<AccountId, Balance> {
 	/// The members being backed.
 	pub votes: Vec<AccountId>,
@@ -160,7 +159,7 @@ pub struct Voter<AccountId, Balance> {
 }
 
 /// A holder of a seat as either a member or a runner-up.
-#[derive(Encode, Decode, Clone, Default, RuntimeDebug, PartialEq, TypeInfo)]
+#[derive(Encode, Decode, Clone, Default, RuntimeDebug, PartialEq)]
 pub struct SeatHolder<AccountId, Balance> {
 	/// The holder.
 	pub who: AccountId,
@@ -532,6 +531,11 @@ pub mod pallet {
 	}
 
 	#[pallet::event]
+	#[pallet::metadata(
+		<T as frame_system::Config>::AccountId = "AccountId",
+		BalanceOf<T> = "Balance",
+		Vec<(<T as frame_system::Config>::AccountId, BalanceOf<T>)> = "Vec<(AccountId, Balance)>",
+	)]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// A new term with \[new_members\]. This indicates that enough candidates existed to run

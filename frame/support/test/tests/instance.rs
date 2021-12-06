@@ -21,14 +21,13 @@ use codec::{Codec, Decode, Encode, EncodeLike};
 use frame_support::{
 	inherent::{InherentData, InherentIdentifier, MakeFatalError, ProvideInherent},
 	metadata::{
-		PalletStorageMetadata, StorageEntryMetadata, StorageEntryModifier, StorageEntryType,
-		StorageHasher,
+		DecodeDifferent, DefaultByteGetter, StorageEntryMetadata, StorageEntryModifier,
+		StorageEntryType, StorageHasher, StorageMetadata,
 	},
 	parameter_types,
 	traits::Get,
 	Parameter, StorageDoubleMap, StorageMap, StorageValue,
 };
-use scale_info::TypeInfo;
 use sp_core::{sr25519, H256};
 use sp_runtime::{
 	generic,
@@ -54,7 +53,7 @@ mod module1 {
 		type Event: From<Event<Self, I>> + Into<<Self as system::Config>::Event>;
 		type Origin: From<Origin<Self, I>>;
 		type SomeParameter: Get<u32>;
-		type GenericType: Default + Clone + Codec + EncodeLike + TypeInfo;
+		type GenericType: Default + Clone + Codec + EncodeLike;
 	}
 
 	frame_support::decl_module! {
@@ -109,7 +108,7 @@ mod module1 {
 		}
 	}
 
-	#[derive(PartialEq, Eq, Clone, sp_runtime::RuntimeDebug, Encode, Decode, TypeInfo)]
+	#[derive(PartialEq, Eq, Clone, sp_runtime::RuntimeDebug, Encode, Decode)]
 	pub enum Origin<T: Config<I>, I>
 	where
 		T::BlockNumber: From<u32>,
@@ -182,7 +181,7 @@ mod module2 {
 		}
 	}
 
-	#[derive(PartialEq, Eq, Clone, sp_runtime::RuntimeDebug, Encode, Decode, TypeInfo)]
+	#[derive(PartialEq, Eq, Clone, sp_runtime::RuntimeDebug, Encode, Decode)]
 	pub enum Origin<T: Config<I>, I = DefaultInstance> {
 		Members(u32),
 		_Phantom(std::marker::PhantomData<(T, I)>),
@@ -411,45 +410,54 @@ fn storage_with_instance_basic_operation() {
 	});
 }
 
-fn expected_metadata() -> PalletStorageMetadata {
-	PalletStorageMetadata {
-		prefix: "Instance2Module2",
-		entries: vec![
-			StorageEntryMetadata {
-				name: "Value",
-				modifier: StorageEntryModifier::Default,
-				ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
-				default: vec![0, 0, 0, 0],
-				docs: vec![],
+const EXPECTED_METADATA: StorageMetadata = StorageMetadata {
+	prefix: DecodeDifferent::Encode("Instance2Module2"),
+	entries: DecodeDifferent::Encode(&[
+		StorageEntryMetadata {
+			name: DecodeDifferent::Encode("Value"),
+			modifier: StorageEntryModifier::Default,
+			ty: StorageEntryType::Plain(DecodeDifferent::Encode("T::Amount")),
+			default: DecodeDifferent::Encode(DefaultByteGetter(&module2::__GetByteStructValue(
+				std::marker::PhantomData::<(Runtime, module2::Instance2)>,
+			))),
+			documentation: DecodeDifferent::Encode(&[]),
+		},
+		StorageEntryMetadata {
+			name: DecodeDifferent::Encode("Map"),
+			modifier: StorageEntryModifier::Default,
+			ty: StorageEntryType::Map {
+				hasher: StorageHasher::Identity,
+				key: DecodeDifferent::Encode("u64"),
+				value: DecodeDifferent::Encode("u64"),
+				unused: false,
 			},
-			StorageEntryMetadata {
-				name: "Map",
-				modifier: StorageEntryModifier::Default,
-				ty: StorageEntryType::Map {
-					hashers: vec![StorageHasher::Identity],
-					key: scale_info::meta_type::<u64>(),
-					value: scale_info::meta_type::<u64>(),
-				},
-				default: [0u8; 8].to_vec(),
-				docs: vec![],
+			default: DecodeDifferent::Encode(DefaultByteGetter(&module2::__GetByteStructMap(
+				std::marker::PhantomData::<(Runtime, module2::Instance2)>,
+			))),
+			documentation: DecodeDifferent::Encode(&[]),
+		},
+		StorageEntryMetadata {
+			name: DecodeDifferent::Encode("DoubleMap"),
+			modifier: StorageEntryModifier::Default,
+			ty: StorageEntryType::DoubleMap {
+				hasher: StorageHasher::Identity,
+				key2_hasher: StorageHasher::Identity,
+				key1: DecodeDifferent::Encode("u64"),
+				key2: DecodeDifferent::Encode("u64"),
+				value: DecodeDifferent::Encode("u64"),
 			},
-			StorageEntryMetadata {
-				name: "DoubleMap",
-				modifier: StorageEntryModifier::Default,
-				ty: StorageEntryType::Map {
-					hashers: vec![StorageHasher::Identity, StorageHasher::Identity],
-					key: scale_info::meta_type::<(u64, u64)>(),
-					value: scale_info::meta_type::<u64>(),
-				},
-				default: [0u8; 8].to_vec(),
-				docs: vec![],
-			},
-		],
-	}
-}
+			default: DecodeDifferent::Encode(DefaultByteGetter(
+				&module2::__GetByteStructDoubleMap(
+					std::marker::PhantomData::<(Runtime, module2::Instance2)>,
+				),
+			)),
+			documentation: DecodeDifferent::Encode(&[]),
+		},
+	]),
+};
 
 #[test]
 fn test_instance_storage_metadata() {
 	let metadata = Module2_2::storage_metadata();
-	pretty_assertions::assert_eq!(expected_metadata(), metadata);
+	pretty_assertions::assert_eq!(EXPECTED_METADATA, metadata);
 }

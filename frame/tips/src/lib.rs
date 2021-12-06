@@ -83,7 +83,7 @@ pub type NegativeImbalanceOf<T> = pallet_treasury::NegativeImbalanceOf<T>;
 
 /// An open tipping "motion". Retains all details of a tip including information on the finder
 /// and the members who have voted.
-#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, scale_info::TypeInfo)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug)]
 pub struct OpenTip<
 	AccountId: Parameter,
 	Balance: Parameter,

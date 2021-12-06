@@ -167,7 +167,6 @@ use codec::{Codec, Decode, Encode, MaxEncodedLen};
 use frame_support::traits::GenesisBuild;
 use frame_support::{
 	ensure,
-	pallet_prelude::DispatchResult,
 	traits::{
 		tokens::{fungible, BalanceStatus as Status, DepositConsequence, WithdrawConsequence},
 		Currency, ExistenceRequirement,
@@ -178,13 +177,12 @@ use frame_support::{
 	WeakBoundedVec,
 };
 use frame_system as system;
-use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{
 		AtLeast32BitUnsigned, Bounded, CheckedAdd, CheckedSub, MaybeSerializeDeserialize,
 		Saturating, StaticLookup, Zero,
 	},
-	ArithmeticError, DispatchError, RuntimeDebug,
+	ArithmeticError, DispatchError, DispatchResult, RuntimeDebug,
 };
 use sp_std::{cmp, fmt::Debug, mem, ops::BitOr, prelude::*, result};
 pub use weights::WeightInfo;
@@ -208,8 +206,7 @@ pub mod pallet {
 			+ Copy
 			+ MaybeSerializeDeserialize
 			+ Debug
-			+ MaxEncodedLen
-			+ TypeInfo;
+			+ MaxEncodedLen;
 
 		/// Handler for the unbalanced reduction when removing a dust account.
 		type DustRemoval: OnUnbalanced<NegativeImbalance<Self, I>>;
@@ -420,7 +417,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			dest: <T::Lookup as StaticLookup>::Source,
 			keep_alive: bool,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			use fungible::Inspect;
 			let transactor = ensure_signed(origin)?;
 			let reducible_balance = Self::reducible_balance(&transactor, keep_alive);
@@ -432,27 +429,13 @@ pub mod pallet {
 				reducible_balance,
 				keep_alive.into(),
 			)?;
-			Ok(())
-		}
-
-		/// Unreserve some balance from a user by force.
-		///
-		/// Can only be called by ROOT.
-		#[pallet::weight(T::WeightInfo::force_unreserve())]
-		pub fn force_unreserve(
-			origin: OriginFor<T>,
-			who: <T::Lookup as StaticLookup>::Source,
-			amount: T::Balance,
-		) -> DispatchResult {
-			ensure_root(origin)?;
-			let who = T::Lookup::lookup(who)?;
-			let _leftover = <Self as ReservableCurrency<_>>::unreserve(&who, amount);
-			Ok(())
+			Ok(().into())
 		}
 	}
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	#[pallet::metadata(T::AccountId = "AccountId", T::Balance = "Balance")]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// An account was created with some free balance. \[account, free_balance\]
 		Endowed(T::AccountId, T::Balance),
@@ -616,7 +599,7 @@ impl<T: Config<I>, I: 'static> GenesisConfig<T, I> {
 }
 
 /// Simplified reasons for withdrawing balance.
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, MaxEncodedLen)]
 pub enum Reasons {
 	/// Paying system transaction fees.
 	Fee = 0,
@@ -650,7 +633,7 @@ impl BitOr for Reasons {
 
 /// A single lock on a balance. There can be many of these on an account and they "overlap", so the
 /// same balance is frozen by multiple locks.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, MaxEncodedLen)]
 pub struct BalanceLock<Balance> {
 	/// An identifier for this lock. Only one lock may be in existence for each identifier.
 	pub id: LockIdentifier,
@@ -661,7 +644,7 @@ pub struct BalanceLock<Balance> {
 }
 
 /// Store named reserved balance.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, MaxEncodedLen)]
 pub struct ReserveData<ReserveIdentifier, Balance> {
 	/// The identifier for the named reserve.
 	pub id: ReserveIdentifier,
@@ -670,7 +653,7 @@ pub struct ReserveData<ReserveIdentifier, Balance> {
 }
 
 /// All balance information for an account.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, Default, RuntimeDebug, MaxEncodedLen, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, Default, RuntimeDebug, MaxEncodedLen)]
 pub struct AccountData<Balance> {
 	/// Non-reserved part of the balance. There may still be restrictions on this, but it is the
 	/// total pool what may in principle be transferred, reserved and used for tipping.
@@ -717,7 +700,7 @@ impl<Balance: Saturating + Copy + Ord> AccountData<Balance> {
 // A value placed in storage that represents the current version of the Balances storage.
 // This value is used by the `on_runtime_upgrade` logic to determine whether we run
 // storage migration logic. This should match directly with the semantic versions of the Rust crate.
-#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
+#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, MaxEncodedLen)]
 enum Releases {
 	V1_0_0,
 	V2_0_0,

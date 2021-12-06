@@ -17,15 +17,13 @@
 
 use crate::{Config, Pallet};
 use codec::{Decode, Encode};
-use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{SignedExtension, Zero},
 	transaction_validity::TransactionValidityError,
 };
 
 /// Genesis hash check to provide replay protection between different networks.
-#[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
-#[scale_info(skip_type_params(T))]
+#[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct CheckGenesis<T: Config + Send + Sync>(sp_std::marker::PhantomData<T>);
 
 impl<T: Config + Send + Sync> sp_std::fmt::Debug for CheckGenesis<T> {

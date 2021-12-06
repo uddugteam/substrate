@@ -17,7 +17,6 @@
 
 use frame_support::{
 	codec::{Decode, Encode},
-	scale_info::TypeInfo,
 	sp_runtime::{
 		generic,
 		traits::{BlakeTwo256, Verify},
@@ -35,12 +34,12 @@ mod module {
 		(<T as system::Config>::AccountId, Role, <T as system::Config>::BlockNumber);
 	pub type Requests<T> = Vec<Request<T>>;
 
-	#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, Debug, TypeInfo)]
+	#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, Debug)]
 	pub enum Role {
 		Storage,
 	}
 
-	#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, Debug, TypeInfo)]
+	#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, Debug)]
 	pub struct RoleParameters<T: Config> {
 		// minimum actors to maintain - if role is unstaking
 		// and remaining actors would be less that this value - prevent or punish for unstaking
@@ -83,7 +82,7 @@ mod module {
 		}
 	}
 
-	pub trait Config: system::Config + TypeInfo {}
+	pub trait Config: system::Config {}
 
 	frame_support::decl_module! {
 		pub struct Module<T: Config> for enum Call where origin: T::Origin, system=system {}

@@ -126,7 +126,6 @@ fn create_and_impl_instance_struct(
 			Clone, Eq, PartialEq,
 			#scrate::codec::Encode,
 			#scrate::codec::Decode,
-			#scrate::scale_info::TypeInfo,
 			#scrate::RuntimeDebug,
 		)]
 		#doc

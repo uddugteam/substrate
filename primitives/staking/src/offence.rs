@@ -170,7 +170,7 @@ impl<Reporter, Offender, Res: Default> OnOffenceHandler<Reporter, Offender, Res>
 }
 
 /// A details about an offending authority for a particular kind of offence.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug, scale_info::TypeInfo)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug)]
 pub struct OffenceDetails<Reporter, Offender> {
 	/// The offending authority id
 	pub offender: Offender,

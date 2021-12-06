@@ -112,7 +112,7 @@ mod tests;
 
 /// The activity status of a voter.
 #[derive(
-	PartialEq, Eq, Copy, Clone, Encode, Decode, Default, RuntimeDebug, scale_info::TypeInfo,
+	PartialEq, Eq, Copy, Clone, Encode, Decode, Default, RuntimeDebug,
 )]
 pub struct VoterInfo<Balance> {
 	/// Last VoteIndex in which this voter assigned (or initialized) approvals.

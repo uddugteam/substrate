@@ -40,8 +40,8 @@ pub use impls::*;
 use crate::{
 	migrations, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraIndex, EraPayout,
 	EraRewardPoints, Exposure, Forcing, NegativeImbalanceOf, Nominations, PositiveImbalanceOf,
-	Releases, RewardDestination, SessionInterface, StakingLedger, UnappliedSlash, UnlockChunk,
-	ValidatorPrefs,
+	Releases, RewardDestination, SessionInterface, StakerStatus, StakingLedger, UnappliedSlash,
+	UnlockChunk, ValidatorPrefs,
 };
 
 pub const MAX_UNLOCKING_CHUNKS: usize = 32;
@@ -453,8 +453,7 @@ pub mod pallet {
 		pub force_era: Forcing,
 		pub slash_reward_fraction: Perbill,
 		pub canceled_payout: BalanceOf<T>,
-		pub stakers:
-			Vec<(T::AccountId, T::AccountId, BalanceOf<T>, crate::StakerStatus<T::AccountId>)>,
+		pub stakers: Vec<(T::AccountId, T::AccountId, BalanceOf<T>, StakerStatus<T::AccountId>)>,
 		pub min_nominator_bond: BalanceOf<T>,
 		pub min_validator_bond: BalanceOf<T>,
 	}
@@ -503,11 +502,11 @@ pub mod pallet {
 					RewardDestination::Staked,
 				));
 				frame_support::assert_ok!(match status {
-					crate::StakerStatus::Validator => <Pallet<T>>::validate(
+					StakerStatus::Validator => <Pallet<T>>::validate(
 						T::Origin::from(Some(controller.clone()).into()),
 						Default::default(),
 					),
-					crate::StakerStatus::Nominator(votes) => <Pallet<T>>::nominate(
+					StakerStatus::Nominator(votes) => <Pallet<T>>::nominate(
 						T::Origin::from(Some(controller.clone()).into()),
 						votes.iter().map(|l| T::Lookup::unlookup(l.clone())).collect(),
 					),
@@ -519,6 +518,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(crate) fn deposit_event)]
+	#[pallet::metadata(T::AccountId = "AccountId", BalanceOf<T> = "Balance")]
 	pub enum Event<T: Config> {
 		/// The era payout has been set; the first balance is the validator-payout; the second is
 		/// the remainder from the maximum amount of reward.

@@ -80,20 +80,20 @@ benchmarks! {
 		let k in 1 .. MAX_KEYS;
 		let e in 1 .. MAX_EXTERNAL_ADDRESSES;
 		let (input_heartbeat, signature) = create_heartbeat::<T>(k, e)?;
-		let call = Call::heartbeat { heartbeat: input_heartbeat, signature };
+		let call = Call::heartbeat(input_heartbeat, signature);
 	}: {
 		ImOnline::<T>::validate_unsigned(TransactionSource::InBlock, &call)
-			.map_err(<&str>::from)?;
+			.map_err(|e| -> &'static str { e.into() })?;
 	}
 
 	validate_unsigned_and_then_heartbeat {
 		let k in 1 .. MAX_KEYS;
 		let e in 1 .. MAX_EXTERNAL_ADDRESSES;
 		let (input_heartbeat, signature) = create_heartbeat::<T>(k, e)?;
-		let call = Call::heartbeat { heartbeat: input_heartbeat, signature };
+		let call = Call::heartbeat(input_heartbeat, signature);
 	}: {
 		ImOnline::<T>::validate_unsigned(TransactionSource::InBlock, &call)
-			.map_err(<&str>::from)?;
+			.map_err(|e| -> &'static str { e.into() })?;
 		call.dispatch_bypass_filter(RawOrigin::None.into())?;
 	}
 }

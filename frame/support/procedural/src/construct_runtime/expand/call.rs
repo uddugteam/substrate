@@ -54,7 +54,6 @@ pub fn expand_outer_dispatch(
 			Clone, PartialEq, Eq,
 			#scrate::codec::Encode,
 			#scrate::codec::Decode,
-			#scrate::scale_info::TypeInfo,
 			#scrate::RuntimeDebug,
 		)]
 		pub enum Call {

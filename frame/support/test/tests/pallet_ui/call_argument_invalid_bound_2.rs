@@ -5,7 +5,7 @@ mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
-		type Bar: scale_info::TypeInfo;
+		type Bar;
 	}
 
 	#[pallet::pallet]

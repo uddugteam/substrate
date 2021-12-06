@@ -26,11 +26,10 @@
 //! which should be passed to `frame_system` configuration when runtime is being set up.
 
 use frame_support::weights::{constants, DispatchClass, OneOrMany, PerDispatchClass, Weight};
-use scale_info::TypeInfo;
 use sp_runtime::{Perbill, RuntimeDebug};
 
 /// Block length limit configuration.
-#[derive(RuntimeDebug, Clone, codec::Encode, codec::Decode, TypeInfo)]
+#[derive(RuntimeDebug, Clone, codec::Encode, codec::Decode)]
 pub struct BlockLength {
 	/// Maximal total length in bytes for each extrinsic class.
 	///
@@ -92,7 +91,7 @@ pub type ValidationResult = Result<BlockWeights, ValidationErrors>;
 const DEFAULT_NORMAL_RATIO: Perbill = Perbill::from_percent(75);
 
 /// `DispatchClass`-specific weight configuration.
-#[derive(RuntimeDebug, Clone, codec::Encode, codec::Decode, TypeInfo)]
+#[derive(RuntimeDebug, Clone, codec::Encode, codec::Decode)]
 pub struct WeightsPerClass {
 	/// Base weight of single extrinsic of given class.
 	pub base_extrinsic: Weight,
@@ -192,7 +191,7 @@ pub struct WeightsPerClass {
 ///
 /// As a consequence of `reserved` space, total consumed block weight might exceed `max_block`
 /// value, so this parameter should rather be thought of as "target block weight" than a hard limit.
-#[derive(RuntimeDebug, Clone, codec::Encode, codec::Decode, TypeInfo)]
+#[derive(RuntimeDebug, Clone, codec::Encode, codec::Decode)]
 pub struct BlockWeights {
 	/// Base weight of block execution.
 	pub base_block: Weight,

@@ -61,7 +61,7 @@ use frame_support::{
 	RuntimeDebug,
 };
 use frame_system::{self as system, RawOrigin};
-use scale_info::TypeInfo;
+
 use sp_io::hashing::blake2_256;
 use sp_runtime::{
 	traits::{Dispatchable, Zero},
@@ -80,7 +80,7 @@ pub type OpaqueCall = Vec<u8>;
 /// A global extrinsic index, formed as the extrinsic index within a block, together with that
 /// block's height. This allows a transaction in which a multisig operation of a particular
 /// composite was created to be uniquely identified.
-#[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug, TypeInfo)]
+#[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug)]
 pub struct Timepoint<BlockNumber> {
 	/// The height of the chain at the point in time.
 	height: BlockNumber,
@@ -89,7 +89,7 @@ pub struct Timepoint<BlockNumber> {
 }
 
 /// An open multisig operation.
-#[derive(Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug, TypeInfo)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, Default, RuntimeDebug)]
 pub struct Multisig<BlockNumber, Balance, AccountId> {
 	/// The extrinsic when the multisig operation was opened.
 	when: Timepoint<BlockNumber>,

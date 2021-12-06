@@ -130,7 +130,7 @@ pub trait RuntimeAppPublic: Sized {
 	const CRYPTO_ID: CryptoTypeId;
 
 	/// The signature that will be generated when signing with the corresponding private key.
-	type Signature: Codec + Debug + MaybeHash + Eq + PartialEq + Clone + scale_info::TypeInfo;
+	type Signature: Codec + Debug + MaybeHash + Eq + PartialEq + Clone;
 
 	/// Returns all public keys for this application in the keystore.
 	fn all() -> crate::Vec<Self>;

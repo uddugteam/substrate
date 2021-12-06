@@ -95,7 +95,7 @@ pub mod pallet {
 }
 
 /// Request to enlist participant.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct EnlistedParticipant {
 	pub account: Vec<u8>,
 	pub signature: Vec<u8>,
