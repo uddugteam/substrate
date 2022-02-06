@@ -177,7 +177,10 @@ pub mod pallet {
     impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
         /// Offchain Worker entry point.
 
-        // needs to be synchronized with offchain_worker actitivies
+        // Called at the beginning of every block before any extrinsics. Clears
+        // `ConnectionQueue` and `DhtQueue` values every block, and clears
+        // `DataQueue` every other block, since they should have been processed
+        // Returns a weight of 0
         fn on_initialize(block_number: T::BlockNumber) -> Weight {
             <ConnectionQueue<T>>::kill();
             <DhtQueue<T>>::kill();
@@ -189,6 +192,11 @@ pub mod pallet {
             0
         }
 
+        // Called at the beginning of every block to create extrinsics.
+        // - `connection_housekeeping` and `handle_dht_requests` called every block
+        // - `handle_data_requests` is called on every other block
+        // - `print_metadata` is called every 5 blocks
+        // blocks to alleviate some bandwidth and storage congestion
         fn offchain_worker(block_number: T::BlockNumber) {
             // process connect/disconnect commands
             if let Err(e) = Self::connection_housekeeping() {
@@ -319,7 +327,7 @@ pub mod pallet {
 
 
     impl<T: Config> Pallet<T> {
-        // send a request to the local IPFS node; can only be called be an off-chain worker
+        // "Sends" a request to the local IPFS node by adding it to the offchain storage
         fn ipfs_request(req: IpfsRequest, deadline: impl Into<Option<Timestamp>>) -> Result<IpfsResponse, Error<T>> {
             let ipfs_request = ipfs::PendingRequest::new(req).map_err(|_| Error::<T>::CantCreateRequest)?;
             ipfs_request.try_wait(deadline)
@@ -335,6 +343,8 @@ pub mod pallet {
                 })
         }
 
+        // Reads from the `ConnectionQueue` and connects / disconnects
+        // from desired / undesired peers, respectively
         fn connection_housekeeping() -> Result<(), Error<T>> {
             let mut deadline;
 
@@ -374,7 +384,8 @@ pub mod pallet {
             Ok(())
         }
 
-
+        // Reads `FindPeer` and `GetProviders` commands from the `DhtQueue`,
+        // and requests their execution from the native runtime
         fn handle_dht_requests() -> Result<(), Error<T>> {
             let mut deadline;
 
@@ -422,6 +433,9 @@ pub mod pallet {
             Ok(())
         }
 
+        // Reads `AddBytes`, `CatBytes`, `DataCommand`, `RemoveBlock`, `InsertPin`,
+        // and `RemovePin` commands from the `DataQueue` and requests their
+        // execution from the native runtime.
         fn handle_data_requests() -> Result<(), Error<T>> {
             let data_queue = DataQueue::<T>::get();
             let len = data_queue.len();
@@ -499,6 +513,7 @@ pub mod pallet {
             Ok(())
         }
 
+        // Logs metadata (the number of connected peers) to the console at the DEBUG log level
         fn print_metadata() -> Result<(), Error<T>> {
             let deadline = Some(timestamp().add(Duration::from_millis(200)));
 
