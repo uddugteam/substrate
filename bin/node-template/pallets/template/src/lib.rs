@@ -63,10 +63,12 @@ pub enum ConnectionCommand {
 
 #[derive(Encode, Decode, RuntimeDebug, PartialEq)]
 pub enum DataCommand {
-    /// (data)
     AddBytes(Vec<u8>),
-    /// cid
     CatBytes(Vec<u8>),
+    /// (data)
+    SetKeyValue(Vec<u8>, Vec<u8>),
+    /// cid
+    // GetKeyValue(Vec<u8>),
     /// cid
     InsertPin(Vec<u8>),
     /// hash
@@ -125,6 +127,24 @@ pub mod pallet {
     #[pallet::generate_store(pub(super) trait Store)]
     pub struct Pallet<T>(_);
 
+    #[pallet::validate_unsigned]
+    impl<T: Config> ValidateUnsigned for Pallet<T> {
+        type Call = Call<T>;
+
+        /// Validate unsigned call to this module.
+        ///
+        /// By default unsigned transactions are disallowed, but implementing the validator
+        /// here we make sure that some particular calls (the ones produced by offchain worker)
+        /// are being whitelisted and marked as valid.
+        fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
+            if let Call::submit_price_unsigned { block_number, price: new_price } = call {
+                Self::validate_transaction_parameters(block_number, new_price)
+            } else {
+                InvalidTransaction::Call.into()
+            }
+        }
+    }
+
     // The pallet's runtime storage items.
 
     #[pallet::storage]
@@ -142,6 +162,9 @@ pub mod pallet {
     // A list of requests to the DHT.
     pub type DhtQueue<T: Config> = StorageValue<_, Vec<DhtCommand>, ValueQuery>;
 
+    #[pallet::storage]
+    #[pallet::getter(fn key_value)]
+    pub type KeyValue<T: Config> = StorageMap<_, Blake2_128Concat, Vec<u8>, Vec<u8>, ValueQuery>;
 
     // Pallets use events to inform users when important changes are made.
     #[pallet::event]
@@ -152,6 +175,7 @@ pub mod pallet {
         SomethingStored(u32, T::AccountId),
         ConnectionRequested(T::AccountId),
         DisconnectRequested(T::AccountId),
+        QueuedKeyValueToSet(T::AccountId),
         QueuedDataToAdd(T::AccountId),
         QueuedDataToCat(T::AccountId),
         QueuedDataToPin(T::AccountId),
@@ -240,6 +264,17 @@ pub mod pallet {
 
             <ConnectionQueue<T>>::mutate(|cmds| if !cmds.contains(&cmd) { cmds.push(cmd) });
             Self::deposit_event(Event::DisconnectRequested(who));
+            Ok(())
+        }
+
+        /// Add arbitrary bytes to the IPFS repository. The registered `Cid` is printed out in the
+        /// logs.
+        #[pallet::weight(200_000)]
+        pub fn set_key_value(origin: OriginFor<T>, data: Vec<u8>, key: Vec<u8>) -> DispatchResult {
+            let who = ensure_signed(origin)?;
+
+            <DataQueue<T>>::mutate(|queue| queue.push(DataCommand::SetKeyValue(data, key)));
+            Self::deposit_event(Event::QueuedKeyValueToSet(who));
             Ok(())
         }
 
@@ -432,6 +467,18 @@ pub mod pallet {
             let deadline = Some(timestamp().add(Duration::from_millis(1_000)));
             for cmd in data_queue.into_iter() {
                 match cmd {
+                    DataCommand::SetKeyValue(data, key) => {
+                        match Self::ipfs_request(IpfsRequest::AddBytes(data.clone()), deadline) {
+                            Ok(IpfsResponse::AddBytes(cid)) => {
+                                log::info!(
+                                "IPFS: added data with Cid {}",
+                                str::from_utf8(&cid).expect("our own IPFS node can be trusted here; qed")
+                            );
+                            },
+                            Ok(_) => unreachable!("only AddBytes can be a response for that request type; qed"),
+                            Err(e) => log::error!("IPFS: add error: {:?}", e),
+                        }
+                    }
                     DataCommand::AddBytes(data) => {
                         match Self::ipfs_request(IpfsRequest::AddBytes(data.clone()), deadline) {
                             Ok(IpfsResponse::AddBytes(cid)) => {
