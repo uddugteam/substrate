@@ -10,7 +10,7 @@ error: `on_initialize` can only be passed once as input.
 11 | | }
    | |_^
    |
-   = note: this error originates in a macro (in Nightly builds, run with -Z macro-backtrace for more info)
+   = note: this error originates in the macro `$crate::decl_module` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0601]: `main` function not found in crate `$CRATE`
   --> $DIR/reserved_keyword_two_times_on_initialize.rs:1:1
