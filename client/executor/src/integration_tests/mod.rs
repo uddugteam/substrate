@@ -626,21 +626,21 @@ fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 	assert_eq!(len, 2);
 }
 
-test_wasm_execution!(spawning_runtime_instance_should_work);
-fn spawning_runtime_instance_should_work(wasm_method: WasmExecutionMethod) {
-	let mut ext = TestExternalities::default();
-	let mut ext = ext.ext();
+// test_wasm_execution!(spawning_runtime_instance_should_work);
+// fn spawning_runtime_instance_should_work(wasm_method: WasmExecutionMethod) {
+// 	let mut ext = TestExternalities::default();
+// 	let mut ext = ext.ext();
+//
+// 	call_in_wasm("test_spawn", &[], wasm_method, &mut ext).unwrap();
+// }
 
-	call_in_wasm("test_spawn", &[], wasm_method, &mut ext).unwrap();
-}
-
-test_wasm_execution!(spawning_runtime_instance_nested_should_work);
-fn spawning_runtime_instance_nested_should_work(wasm_method: WasmExecutionMethod) {
-	let mut ext = TestExternalities::default();
-	let mut ext = ext.ext();
-
-	call_in_wasm("test_nested_spawn", &[], wasm_method, &mut ext).unwrap();
-}
+// test_wasm_execution!(spawning_runtime_instance_nested_should_work);
+// fn spawning_runtime_instance_nested_should_work(wasm_method: WasmExecutionMethod) {
+// 	let mut ext = TestExternalities::default();
+// 	let mut ext = ext.ext();
+//
+// 	call_in_wasm("test_nested_spawn", &[], wasm_method, &mut ext).unwrap();
+// }
 
 test_wasm_execution!(panic_in_spawned_instance_panics_on_joining_its_result);
 fn panic_in_spawned_instance_panics_on_joining_its_result(wasm_method: WasmExecutionMethod) {
