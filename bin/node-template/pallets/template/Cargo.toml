@@ -27,6 +27,8 @@ sp-core = { default-features = false, version = "4.0.0-dev", path = "../../../..
 sp-runtime = { default-features = false, version = "4.0.0-dev", path = "../../../../primitives/runtime" }
 sp-keystore = { version = "0.10.0-dev", path = "../../../../primitives/keystore", optional = true }
 log = { version = "0.4.14", default-features = false }
+parity-util-mem = { version = "0.10.0", default-features = false, features = ["primitive-types"] }
+parity-util-mem-derive = "0.1.0"
 
 [features]
 default = ['std']

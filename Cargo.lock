@@ -5844,6 +5844,8 @@ dependencies = [
  "frame-system",
  "log 0.4.14",
  "parity-scale-codec",
+ "parity-util-mem",
+ "parity-util-mem-derive",
  "scale-info",
  "sp-core",
  "sp-io",

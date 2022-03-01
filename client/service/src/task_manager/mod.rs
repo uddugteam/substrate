@@ -78,7 +78,7 @@ impl SpawnTaskHandle {
 	) {
 		if self.task_notifier.is_closed() {
 			debug!("Attempt to spawn a new task has been prevented: {}", name);
-			return
+			return;
 		}
 
 		let on_exit = self.on_exit.clone();
@@ -248,7 +248,7 @@ impl TaskManager {
 	/// service tasks.
 	pub fn new(
 		tokio_handle: Handle,
-		ipfs_rt: tokio::runtime::Runtime,
+		ipfs_rt: std::sync::Arc<parking_lot::Mutex<tokio::runtime::Runtime>>,
 		prometheus_registry: Option<&Registry>,
 	) -> Result<Self, PrometheusError> {
 		let (signal, on_exit) = exit_future::signal();
@@ -266,8 +266,6 @@ impl TaskManager {
 			tokio_handle.spawn(background_tasks.for_each_concurrent(None, |x| async move {
 				let _ = x.await;
 			}));
-
-		let ipfs_rt = std::sync::Arc::new(parking_lot::Mutex::new(ipfs_rt));
 
 		Ok(Self {
 			on_exit,
