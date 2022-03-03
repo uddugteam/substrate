@@ -90,43 +90,44 @@ mod tests {
 	use sp_runtime::{traits::IdentifyAccount, MultiSigner};
 	use test_runner::{build_runtime, client_parts, ConfigOrChainSpec, Node};
 
-	// #[test]
-	// fn test_runner() {
-	// 	let tokio_runtime = build_runtime().unwrap();
-	// 	let task_executor = task_executor(tokio_runtime.handle().clone());
-	// 	let (rpc, task_manager, client, pool, command_sink, backend) = client_parts::<
-	// 		NodeTemplateChainInfo,
-	// 	>(
-	// 		ConfigOrChainSpec::ChainSpec(Box::new(development_config()), task_executor),
-	// 	)
-	// 	.unwrap();
-	// 	let node = Node::<NodeTemplateChainInfo>::new(
-	// 		rpc,
-	// 		task_manager,
-	// 		client,
-	// 		pool,
-	// 		command_sink,
-	// 		backend,
-	// 	);
-	//
-	// 	tokio_runtime.block_on(async {
-	// 		// seals blocks
-	// 		node.seal_blocks(1).await;
-	// 		// submit extrinsics
-	// 		let alice = MultiSigner::from(Alice.public()).into_account();
-	// 		let _hash = node
-	// 			.submit_extrinsic(
-	// 				frame_system::Call::remark((b"hello world").to_vec()),
-	// 				Some(alice),
-	// 			)
-	// 			.await
-	// 			.unwrap();
-	//
-	// 		// look ma, I can read state.
-	// 		let _events =
-	// 			node.with_state(|| frame_system::Pallet::<node_runtime::Runtime>::events());
-	// 		// get access to the underlying client.
-	// 		let _client = node.client();
-	// 	})
-	// }
+	#[test]
+	#[ignore]
+	/// TODO: Fix test. Test is failing with error "stack overflow".
+	fn test_runner() {
+		let tokio_runtime = build_runtime().unwrap();
+		let (rpc, task_manager, client, pool, command_sink, backend) =
+			client_parts::<NodeTemplateChainInfo>(ConfigOrChainSpec::ChainSpec(
+				Box::new(development_config()),
+				tokio_runtime.handle().clone(),
+			))
+			.unwrap();
+		let node = Node::<NodeTemplateChainInfo>::new(
+			rpc,
+			task_manager,
+			client,
+			pool,
+			command_sink,
+			backend,
+		);
+
+		tokio_runtime.block_on(async {
+			// seals blocks
+			node.seal_blocks(1).await;
+			// submit extrinsics
+			let alice = MultiSigner::from(Alice.public()).into_account();
+			let _hash = node
+				.submit_extrinsic(
+					frame_system::Call::remark((b"hello world").to_vec()),
+					Some(alice),
+				)
+				.await
+				.unwrap();
+
+			// look ma, I can read state.
+			let _events =
+				node.with_state(|| frame_system::Pallet::<node_runtime::Runtime>::events());
+			// get access to the underlying client.
+			let _client = node.client();
+		})
+	}
 }
