@@ -341,6 +341,7 @@ impl<I: ::ipfs::IpfsTypes> AsyncApi<I> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::helper_types::ipfs_types::IpfsTypesRealType;
 	use sc_client_db::offchain::LocalStorage;
 	use sc_network::{NetworkStateInfo, PeerId};
 	use sp_core::offchain::{DbExternalities, Externalities};
@@ -350,9 +351,6 @@ mod tests {
 	};
 
 	struct TestNetwork();
-
-	// struct IpfsTypesDummy;
-	// impl ::ipfs::RepoTypes for IpfsTypesDummy {}
 
 	impl NetworkProvider for TestNetwork {
 		fn set_authorized_peers(&self, _peers: HashSet<PeerId>) {
@@ -394,44 +392,44 @@ mod tests {
 		Db::new(LocalStorage::new_test())
 	}
 
-	// #[test]
-	// fn should_get_timestamp() {
-	// 	let mut api = offchain_api::<IpfsTypesDummy>().0;
-	//
-	// 	// Get timestamp from std.
-	// 	let now = SystemTime::now();
-	// 	let d: u64 = now
-	// 		.duration_since(SystemTime::UNIX_EPOCH)
-	// 		.unwrap()
-	// 		.as_millis()
-	// 		.try_into()
-	// 		.unwrap();
-	//
-	// 	// Get timestamp from offchain api.
-	// 	let timestamp = api.timestamp();
-	//
-	// 	// Compare.
-	// 	assert!(timestamp.unix_millis() > 0);
-	// 	assert!(timestamp.unix_millis() >= d);
-	// }
+	#[test]
+	fn should_get_timestamp() {
+		let mut api = offchain_api::<IpfsTypesRealType>().0;
 
-	// #[test]
-	// fn should_sleep() {
-	// 	let mut api = offchain_api::<IpfsTypesDummy>().0;
-	//
-	// 	// Arrange.
-	// 	let now = api.timestamp();
-	// 	let delta = sp_core::offchain::Duration::from_millis(100);
-	// 	let deadline = now.add(delta);
-	//
-	// 	// Act.
-	// 	api.sleep_until(deadline);
-	// 	let new_now = api.timestamp();
-	//
-	// 	// Assert.
-	// 	// The diff could be more than the sleep duration.
-	// 	assert!(new_now.unix_millis() - 100 >= now.unix_millis());
-	// }
+		// Get timestamp from std.
+		let now = SystemTime::now();
+		let d: u64 = now
+			.duration_since(SystemTime::UNIX_EPOCH)
+			.unwrap()
+			.as_millis()
+			.try_into()
+			.unwrap();
+
+		// Get timestamp from offchain api.
+		let timestamp = api.timestamp();
+
+		// Compare.
+		assert!(timestamp.unix_millis() > 0);
+		assert!(timestamp.unix_millis() >= d);
+	}
+
+	#[test]
+	fn should_sleep() {
+		let mut api = offchain_api::<IpfsTypesRealType>().0;
+
+		// Arrange.
+		let now = api.timestamp();
+		let delta = sp_core::offchain::Duration::from_millis(100);
+		let deadline = now.add(delta);
+
+		// Act.
+		api.sleep_until(deadline);
+		let new_now = api.timestamp();
+
+		// Assert.
+		// The diff could be more than the sleep duration.
+		assert!(new_now.unix_millis() - 100 >= now.unix_millis());
+	}
 
 	#[test]
 	fn should_set_and_get_local_storage() {
@@ -499,12 +497,12 @@ mod tests {
 		assert_eq!(state, converted_back_state);
 	}
 
-	// #[test]
-	// fn should_get_random_seed() {
-	// 	// given
-	// 	let mut api = offchain_api::<IpfsTypesDummy>().0;
-	// 	let seed = api.random_seed();
-	// 	// then
-	// 	assert_ne!(seed, [0; 32]);
-	// }
+	#[test]
+	fn should_get_random_seed() {
+		// given
+		let mut api = offchain_api::<IpfsTypesRealType>().0;
+		let seed = api.random_seed();
+		// then
+		assert_ne!(seed, [0; 32]);
+	}
 }

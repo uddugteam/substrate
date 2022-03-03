@@ -53,6 +53,7 @@ use sp_runtime::{
 use threadpool::ThreadPool;
 
 mod api;
+mod helper_types;
 
 pub use api::Db as OffchainDb;
 pub use sp_offchain::{OffchainWorkerApi, STORAGE_PREFIX};
