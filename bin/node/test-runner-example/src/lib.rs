@@ -92,7 +92,7 @@ mod tests {
 
 	#[test]
 	#[ignore]
-	/// TODO: Fix test. Test is failing with error "stack overflow".
+	/// TODO: FIXME. Test is failing with error "stack overflow".
 	fn test_runner() {
 		let tokio_runtime = build_runtime().unwrap();
 		let (rpc, task_manager, client, pool, command_sink, backend) =
