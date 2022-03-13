@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,8 +21,11 @@
 
 use super::*;
 
-use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelisted_caller};
-use frame_support::traits::{EnsureOrigin, OnInitialize, UnfilteredDispatchable};
+use frame_benchmarking::{account, benchmarks, whitelisted_caller};
+use frame_support::{
+	storage::bounded_vec::BoundedVec,
+	traits::{EnsureOrigin, OnInitialize},
+};
 use frame_system::RawOrigin;
 use sp_runtime::traits::{Bounded, Zero};
 
@@ -55,12 +58,12 @@ benchmarks! {
 		let set_code_index: CallIndex = Lottery::<T>::call_to_index(
 			&frame_system::Call::<T>::set_code{ code: vec![] }.into()
 		)?;
-		let already_called: (u32, Vec<CallIndex>) = (
+		let already_called: (u32, BoundedVec<CallIndex, T::MaxCalls>) = (
 			LotteryIndex::<T>::get(),
-			vec![
+			BoundedVec::<CallIndex, T::MaxCalls>::try_from(vec![
 				set_code_index;
 				T::MaxCalls::get().saturating_sub(1) as usize
-			],
+			]).unwrap(),
 		);
 		Participants::<T>::insert(&caller, already_called);
 
@@ -73,11 +76,9 @@ benchmarks! {
 	set_calls {
 		let n in 0 .. T::MaxCalls::get() as u32;
 		let calls = vec![frame_system::Call::<T>::remark { remark: vec![] }.into(); n as usize];
-
-		let call = Call::<T>::set_calls { calls };
 		let origin = T::ManagerOrigin::successful_origin();
 		assert!(CallIndices::<T>::get().is_empty());
-	}: { call.dispatch_bypass_filter(origin)? }
+	}: _<T::Origin>(origin, calls)
 	verify {
 		if !n.is_zero() {
 			assert!(!CallIndices::<T>::get().is_empty());
@@ -88,10 +89,8 @@ benchmarks! {
 		let price = BalanceOf::<T>::max_value();
 		let end = 10u32.into();
 		let payout = 5u32.into();
-
-		let call = Call::<T>::start_lottery { price, length: end, delay: payout, repeat: true };
 		let origin = T::ManagerOrigin::successful_origin();
-	}: { call.dispatch_bypass_filter(origin)? }
+	}: _<T::Origin>(origin, price, end, payout, true)
 	verify {
 		assert!(crate::Lottery::<T>::get().is_some());
 	}
@@ -99,9 +98,8 @@ benchmarks! {
 	stop_repeat {
 		setup_lottery::<T>(true)?;
 		assert_eq!(crate::Lottery::<T>::get().unwrap().repeat, true);
-		let call = Call::<T>::stop_repeat {};
 		let origin = T::ManagerOrigin::successful_origin();
-	}: { call.dispatch_bypass_filter(origin)? }
+	}: _<T::Origin>(origin)
 	verify {
 		assert_eq!(crate::Lottery::<T>::get().unwrap().repeat, false);
 	}
@@ -168,6 +166,6 @@ benchmarks! {
 		assert_eq!(Lottery::<T>::pot().1, 0u32.into());
 		assert!(!T::Currency::free_balance(&winner).is_zero())
 	}
-}
 
-impl_benchmark_test_suite!(Lottery, crate::mock::new_test_ext(), crate::mock::Test);
+	impl_benchmark_test_suite!(Lottery, crate::mock::new_test_ext(), crate::mock::Test);
+}

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,17 +19,17 @@
 
 use super::*;
 use crate::{unsigned::IndexAssignmentOf, Pallet as MultiPhase};
-use frame_benchmarking::{account, impl_benchmark_test_suite};
-use frame_support::{assert_ok, traits::Hooks};
+use frame_benchmarking::account;
+use frame_support::{
+	assert_ok,
+	traits::{Hooks, TryCollect},
+	BoundedVec,
+};
 use frame_system::RawOrigin;
 use rand::{prelude::SliceRandom, rngs::SmallRng, SeedableRng};
 use sp_arithmetic::{per_things::Percent, traits::One};
 use sp_npos_elections::IndexAssignment;
 use sp_runtime::InnerOf;
-use sp_std::{
-	boxed::Box,
-	convert::{TryFrom, TryInto},
-};
 
 const SEED: u32 = 999;
 
@@ -73,11 +73,12 @@ fn solution_with_size<T: Config>(
 	let active_voters = (0..active_voters_count)
 		.map(|i| {
 			// chose a random subset of winners.
-			let winner_votes = winners
+			let winner_votes: BoundedVec<_, _> = winners
 				.as_slice()
 				.choose_multiple(&mut rng, <SolutionOf<T>>::LIMIT)
 				.cloned()
-				.collect::<Vec<_>>();
+				.try_collect()
+				.expect("<SolutionOf<T>>::LIMIT is the correct bound; qed.");
 			let voter = frame_benchmarking::account::<T::AccountId>("Voter", i, SEED);
 			(voter, stake, winner_votes)
 		})
@@ -91,10 +92,11 @@ fn solution_with_size<T: Config>(
 		.collect::<Vec<T::AccountId>>();
 	let rest_voters = (active_voters_count..size.voters)
 		.map(|i| {
-			let votes = (&non_winners)
+			let votes: BoundedVec<_, _> = (&non_winners)
 				.choose_multiple(&mut rng, <SolutionOf<T>>::LIMIT)
 				.cloned()
-				.collect::<Vec<T::AccountId>>();
+				.try_collect()
+				.expect("<SolutionOf<T>>::LIMIT is the correct bound; qed.");
 			let voter = frame_benchmarking::account::<T::AccountId>("Voter", i, SEED);
 			(voter, stake, votes)
 		})
@@ -146,7 +148,10 @@ fn solution_with_size<T: Config>(
 	let score = solution.clone().score(stake_of, voter_at, target_at).unwrap();
 	let round = <MultiPhase<T>>::round();
 
-	assert!(score[0] > 0, "score is zero, this probably means that the stakes are not set.");
+	assert!(
+		score.minimal_stake > 0,
+		"score is zero, this probably means that the stakes are not set."
+	);
 	Ok(RawSolution { solution, score, round })
 }
 
@@ -156,7 +161,7 @@ fn set_up_data_provider<T: Config>(v: u32, t: u32) {
 		info,
 		"setting up with voters = {} [degree = {}], targets = {}",
 		v,
-		T::DataProvider::MAXIMUM_VOTES_PER_VOTER,
+		<T::DataProvider as ElectionDataProvider>::MaxVotesPerVoter::get(),
 		t
 	);
 
@@ -169,14 +174,16 @@ fn set_up_data_provider<T: Config>(v: u32, t: u32) {
 		})
 		.collect::<Vec<_>>();
 	// we should always have enough voters to fill.
-	assert!(targets.len() > T::DataProvider::MAXIMUM_VOTES_PER_VOTER as usize);
-	targets.truncate(T::DataProvider::MAXIMUM_VOTES_PER_VOTER as usize);
+	assert!(
+		targets.len() > <T::DataProvider as ElectionDataProvider>::MaxVotesPerVoter::get() as usize
+	);
+	targets.truncate(<T::DataProvider as ElectionDataProvider>::MaxVotesPerVoter::get() as usize);
 
 	// fill voters.
 	(0..v).for_each(|i| {
 		let voter = frame_benchmarking::account::<T::AccountId>("Voter", i, SEED);
 		let weight = T::Currency::minimum_balance().saturated_into::<u64>() * 1000;
-		T::DataProvider::add_voter(voter, weight, targets.clone());
+		T::DataProvider::add_voter(voter, weight, targets.clone().try_into().unwrap());
 	});
 }
 
@@ -213,7 +220,11 @@ frame_benchmarking::benchmarks! {
 		let receiver = account("receiver", 0, SEED);
 		let initial_balance = T::Currency::minimum_balance() * 10u32.into();
 		T::Currency::make_free_balance_be(&receiver, initial_balance);
-		let ready: ReadySolution<T::AccountId> = Default::default();
+		let ready = ReadySolution {
+			supports: vec![],
+			score: Default::default(),
+			compute: Default::default()
+		};
 		let deposit: BalanceOf<T> = 10u32.into();
 		let reward: BalanceOf<T> = 20u32.into();
 
@@ -243,10 +254,10 @@ frame_benchmarking::benchmarks! {
 	}
 
 	create_snapshot_internal {
-		// number of votes in snapshot. Fixed to maximum.
-		let v = T::BenchmarkingConfig::SNAPSHOT_MAXIMUM_VOTERS;
-		// number of targets in snapshot. Fixed to maximum.
-		let t = T::BenchmarkingConfig::MAXIMUM_TARGETS;
+		// number of votes in snapshot.
+		let v in (T::BenchmarkingConfig::VOTERS[0]) .. T::BenchmarkingConfig::VOTERS[1];
+		// number of targets in snapshot.
+		let t in (T::BenchmarkingConfig::TARGETS[0]) .. T::BenchmarkingConfig::TARGETS[1];
 
 		// we don't directly need the data-provider to be populated, but it is just easy to use it.
 		set_up_data_provider::<T>(v, t);
@@ -289,7 +300,7 @@ frame_benchmarking::benchmarks! {
 		assert!(<Snapshot<T>>::get().is_some());
 		assert!(<SnapshotMetadata<T>>::get().is_some());
 	}: {
-		assert_ok!(<MultiPhase<T> as ElectionProvider<T::AccountId, T::BlockNumber>>::elect());
+		assert_ok!(<MultiPhase<T> as ElectionProvider>::elect());
 	} verify {
 		assert!(<MultiPhase<T>>::queued_solution().is_none());
 		assert!(<DesiredTargets<T>>::get().is_none());
@@ -299,12 +310,11 @@ frame_benchmarking::benchmarks! {
 	}
 
 	submit {
-		let c in 1 .. (T::SignedMaxSubmissions::get() - 1);
 
 		// the solution will be worse than all of them meaning the score need to be checked against
 		// ~ log2(c)
 		let solution = RawSolution {
-			score: [(10_000_000u128 - 1).into(), 0, 0],
+			score: ElectionScore { minimal_stake: 10_000_000u128 - 1, ..Default::default() },
 			..Default::default()
 		};
 
@@ -313,12 +323,20 @@ frame_benchmarking::benchmarks! {
 		<Round<T>>::put(1);
 
 		let mut signed_submissions = SignedSubmissions::<T>::get();
-		for i in 0..c {
+
+		// Insert `max - 1` submissions because the call to `submit` will insert another
+		// submission and the score is worse then the previous scores.
+		for i in 0..(T::SignedMaxSubmissions::get() - 1) {
 			let raw_solution = RawSolution {
-				score: [(10_000_000 + i).into(), 0, 0],
+				score: ElectionScore { minimal_stake: 10_000_000u128 + (i as u128), ..Default::default() },
 				..Default::default()
 			};
-			let signed_submission = SignedSubmission { raw_solution, ..Default::default() };
+			let signed_submission = SignedSubmission {
+				raw_solution,
+				who: account("submitters", i, SEED),
+				deposit: Default::default(),
+				reward: Default::default(),
+			};
 			signed_submissions.insert(signed_submission);
 		}
 		signed_submissions.put();
@@ -326,9 +344,9 @@ frame_benchmarking::benchmarks! {
 		let caller = frame_benchmarking::whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller,  T::Currency::minimum_balance() * 10u32.into());
 
-	}: _(RawOrigin::Signed(caller), Box::new(solution), c)
+	}: _(RawOrigin::Signed(caller), Box::new(solution))
 	verify {
-		assert!(<MultiPhase<T>>::signed_submissions().len() as u32 == c + 1);
+		assert!(<MultiPhase<T>>::signed_submissions().len() as u32 == T::SignedMaxSubmissions::get());
 	}
 
 	submit_unsigned {
@@ -350,25 +368,8 @@ frame_benchmarking::benchmarks! {
 
 		assert!(<MultiPhase<T>>::queued_solution().is_none());
 		<CurrentPhase<T>>::put(Phase::Unsigned((true, 1u32.into())));
-
-		// encode the most significant storage item that needs to be decoded in the dispatch.
-		let encoded_snapshot = <MultiPhase<T>>::snapshot().ok_or("missing snapshot")?.encode();
-		let encoded_call = Call::<T>::submit_unsigned {
-			raw_solution: Box::new(raw_solution.clone()),
-			witness
-		}.encode();
-	}: {
-		assert_ok!(
-			<MultiPhase<T>>::submit_unsigned(
-				RawOrigin::None.into(),
-				Box::new(raw_solution),
-				witness,
-			)
-		);
-		let _decoded_snap = <RoundSnapshot<T::AccountId> as Decode>::decode(&mut &*encoded_snapshot)
-			.expect("decoding should not fail; qed.");
-		let _decoded_call = <Call<T> as Decode>::decode(&mut &*encoded_call).expect("decoding should not fail; qed.");
-	} verify {
+	}: _(RawOrigin::None, Box::new(raw_solution), witness)
+	verify {
 		assert!(<MultiPhase<T>>::queued_solution().is_some());
 	}
 
@@ -389,13 +390,8 @@ frame_benchmarking::benchmarks! {
 
 		assert_eq!(raw_solution.solution.voter_count() as u32, a);
 		assert_eq!(raw_solution.solution.unique_targets().len() as u32, d);
-
-		// encode the most significant storage item that needs to be decoded in the dispatch.
-		let encoded_snapshot = <MultiPhase<T>>::snapshot().ok_or("snapshot missing")?.encode();
 	}: {
 		assert_ok!(<MultiPhase<T>>::feasibility_check(raw_solution, ElectionCompute::Unsigned));
-		let _decoded_snap = <RoundSnapshot<T::AccountId> as Decode>::decode(&mut &*encoded_snapshot)
-			.expect("decoding should not fail; qed.");
 	}
 
 	// NOTE: this weight is not used anywhere, but the fact that it should succeed when execution in
@@ -519,10 +515,10 @@ frame_benchmarking::benchmarks! {
 		log!(trace, "actual encoded size = {}", encoding.len());
 		assert!(encoding.len() <= desired_size);
 	}
-}
 
-impl_benchmark_test_suite!(
-	MultiPhase,
-	crate::mock::ExtBuilder::default().build_offchainify(10).0,
-	crate::mock::Runtime,
-);
+	impl_benchmark_test_suite!(
+		MultiPhase,
+		crate::mock::ExtBuilder::default().build_offchainify(10).0,
+		crate::mock::Runtime,
+	);
+}

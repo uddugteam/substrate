@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -33,7 +33,7 @@ pub use sp_finality_grandpa as fg_primitives;
 
 use sp_std::prelude::*;
 
-use codec::{self as codec, Decode, Encode};
+use codec::{self as codec, Decode, Encode, MaxEncodedLen};
 pub use fg_primitives::{AuthorityId, AuthorityList, AuthorityWeight, VersionedAuthorityList};
 use fg_primitives::{
 	ConsensusLog, EquivocationProof, ScheduledChange, SetId, GRANDPA_AUTHORITIES_KEY,
@@ -41,9 +41,11 @@ use fg_primitives::{
 };
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
+	pallet_prelude::Get,
 	storage,
 	traits::{KeyOwnerProofSystem, OneSessionHandler, StorageVersion},
 	weights::{Pays, Weight},
+	WeakBoundedVec,
 };
 use sp_runtime::{generic::DigestItem, traits::Zero, DispatchResult, KeyTypeId};
 use sp_session::{GetSessionNumber, GetValidatorCount};
@@ -119,6 +121,10 @@ pub mod pallet {
 
 		/// Weights for this pallet.
 		type WeightInfo: WeightInfo;
+
+		/// Max Authorities in use
+		#[pallet::constant]
+		type MaxAuthorities: Get<u32>;
 	}
 
 	#[pallet::hooks]
@@ -133,13 +139,13 @@ pub mod pallet {
 							median,
 							ScheduledChange {
 								delay: pending_change.delay,
-								next_authorities: pending_change.next_authorities.clone(),
+								next_authorities: pending_change.next_authorities.to_vec(),
 							},
 						))
 					} else {
 						Self::deposit_log(ConsensusLog::ScheduledChange(ScheduledChange {
 							delay: pending_change.delay,
-							next_authorities: pending_change.next_authorities.clone(),
+							next_authorities: pending_change.next_authorities.to_vec(),
 						}));
 					}
 				}
@@ -147,7 +153,9 @@ pub mod pallet {
 				// enact the change if we've reached the enacting block
 				if block_number == pending_change.scheduled_at + pending_change.delay {
 					Self::set_grandpa_authorities(&pending_change.next_authorities);
-					Self::deposit_event(Event::NewAuthorities(pending_change.next_authorities));
+					Self::deposit_event(Event::NewAuthorities {
+						authority_set: pending_change.next_authorities.to_vec(),
+					});
 					<PendingChange<T>>::kill();
 				}
 			}
@@ -246,8 +254,8 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(fn deposit_event)]
 	pub enum Event {
-		/// New authority set has been applied. \[authority_set\]
-		NewAuthorities(AuthorityList),
+		/// New authority set has been applied.
+		NewAuthorities { authority_set: AuthorityList },
 		/// Current authority set has been paused.
 		Paused,
 		/// Current authority set has been resumed.
@@ -291,7 +299,8 @@ pub mod pallet {
 	/// Pending change: (signaled at, scheduled change).
 	#[pallet::storage]
 	#[pallet::getter(fn pending_change)]
-	pub(super) type PendingChange<T: Config> = StorageValue<_, StoredPendingChange<T::BlockNumber>>;
+	pub(super) type PendingChange<T: Config> =
+		StorageValue<_, StoredPendingChange<T::BlockNumber, T::MaxAuthorities>>;
 
 	/// next block number where we can force a change.
 	#[pallet::storage]
@@ -317,16 +326,10 @@ pub mod pallet {
 	#[pallet::getter(fn session_for_set)]
 	pub(super) type SetIdSession<T: Config> = StorageMap<_, Twox64Concat, SetId, SessionIndex>;
 
+	#[cfg_attr(feature = "std", derive(Default))]
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
 		pub authorities: AuthorityList,
-	}
-
-	#[cfg(feature = "std")]
-	impl Default for GenesisConfig {
-		fn default() -> Self {
-			Self { authorities: Default::default() }
-		}
 	}
 
 	#[pallet::genesis_build]
@@ -355,15 +358,21 @@ pub trait WeightInfo {
 	fn note_stalled() -> Weight;
 }
 
+/// Bounded version of `AuthorityList`, `Limit` being the bound
+pub type BoundedAuthorityList<Limit> = WeakBoundedVec<(AuthorityId, AuthorityWeight), Limit>;
+
 /// A stored pending change.
-#[derive(Encode, Decode, TypeInfo)]
-pub struct StoredPendingChange<N> {
+/// `Limit` is the bound for `next_authorities`
+#[derive(Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[codec(mel_bound(N: MaxEncodedLen, Limit: Get<u32>))]
+#[scale_info(skip_type_params(Limit))]
+pub struct StoredPendingChange<N, Limit> {
 	/// The block number this was scheduled at.
 	pub scheduled_at: N,
 	/// The delay in blocks until it will be applied.
 	pub delay: N,
-	/// The next authority set.
-	pub next_authorities: AuthorityList,
+	/// The next authority set, weakly bounded in size by `Limit`.
+	pub next_authorities: BoundedAuthorityList<Limit>,
 	/// If defined it means the change was forced and the given block number
 	/// indicates the median last finalized block when the change was signaled.
 	pub forced: Option<N>,
@@ -372,7 +381,7 @@ pub struct StoredPendingChange<N> {
 /// Current state of the GRANDPA authority set. State transitions must happen in
 /// the same order of states defined below, e.g. `Paused` implies a prior
 /// `PendingPause`.
-#[derive(Decode, Encode, TypeInfo)]
+#[derive(Decode, Encode, TypeInfo, MaxEncodedLen)]
 #[cfg_attr(test, derive(Debug, PartialEq))]
 pub enum StoredState<N> {
 	/// The current authority set is live, and GRANDPA is enabled.
@@ -465,6 +474,14 @@ impl<T: Config> Pallet<T> {
 				<NextForced<T>>::put(scheduled_at + in_blocks * 2u32.into());
 			}
 
+			let next_authorities = WeakBoundedVec::<_, T::MaxAuthorities>::force_from(
+				next_authorities,
+				Some(
+					"Warning: The number of authorities given is too big. \
+					A runtime configuration adjustment may be needed.",
+				),
+			);
+
 			<PendingChange<T>>::put(StoredPendingChange {
 				delay: in_blocks,
 				scheduled_at,
@@ -480,7 +497,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Deposit one of this module's logs.
 	fn deposit_log(log: ConsensusLog<T::BlockNumber>) {
-		let log: DigestItem<T::Hash> = DigestItem::Consensus(GRANDPA_ENGINE_ID, log.encode());
+		let log = DigestItem::Consensus(GRANDPA_ENGINE_ID, log.encode());
 		<frame_system::Pallet<T>>::deposit_log(log.into());
 	}
 
@@ -646,7 +663,7 @@ where
 		SetIdSession::<T>::insert(current_set_id, &session_index);
 	}
 
-	fn on_disabled(i: usize) {
+	fn on_disabled(i: u32) {
 		Self::deposit_log(ConsensusLog::OnDisabled(i as u64))
 	}
 }

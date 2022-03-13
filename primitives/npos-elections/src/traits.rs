@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -10,8 +10,8 @@
 // 	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// distributed under the License is distributed on an "AS IS" BASIS,
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
@@ -22,6 +22,7 @@ use crate::{
 	VoteWeight,
 };
 use codec::Encode;
+use scale_info::TypeInfo;
 use sp_arithmetic::{
 	traits::{Bounded, UniqueSaturatedInto},
 	PerThing,
@@ -35,8 +36,8 @@ use sp_std::{
 
 /// an aggregator trait for a generic type of a voter/target identifier. This usually maps to
 /// substrate's account id.
-pub trait IdentifierT: Clone + Eq + Default + Ord + Debug + codec::Codec {}
-impl<T: Clone + Eq + Default + Ord + Debug + codec::Codec> IdentifierT for T {}
+pub trait IdentifierT: Clone + Eq + Ord + Debug + codec::Codec {}
+impl<T: Clone + Eq + Ord + Debug + codec::Codec> IdentifierT for T {}
 
 /// Aggregator trait for a PerThing that can be multiplied by u128 (ExtendedBalance).
 pub trait PerThing128: PerThing + Mul<ExtendedBalance, Output = ExtendedBalance> {}
@@ -72,7 +73,8 @@ where
 		+ Copy
 		+ Clone
 		+ Bounded
-		+ Encode;
+		+ Encode
+		+ TypeInfo;
 
 	/// The target type. Needs to be an index (convert to usize).
 	type TargetIndex: UniqueSaturatedInto<usize>
@@ -82,7 +84,8 @@ where
 		+ Copy
 		+ Clone
 		+ Bounded
-		+ Encode;
+		+ Encode
+		+ TypeInfo;
 
 	/// The weight/accuracy type of each vote.
 	type Accuracy: PerThing128;

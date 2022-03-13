@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,7 +22,7 @@ use frame_support::{ensure, traits::Get};
 use sp_runtime::{DispatchError, DispatchResult};
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	pub(crate) fn do_transfer(
+	pub fn do_transfer(
 		class: T::ClassId,
 		instance: T::InstanceId,
 		dest: T::AccountId,
@@ -31,10 +31,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			&mut InstanceDetailsFor<T, I>,
 		) -> DispatchResult,
 	) -> DispatchResult {
-		let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::Unknown)?;
+		let class_details = Class::<T, I>::get(&class).ok_or(Error::<T, I>::UnknownClass)?;
 		ensure!(!class_details.is_frozen, Error::<T, I>::Frozen);
 
-		let mut details = Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::Unknown)?;
+		let mut details =
+			Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::UnknownClass)?;
 		ensure!(!details.is_frozen, Error::<T, I>::Frozen);
 		with_details(&class_details, &mut details)?;
 
@@ -44,11 +45,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		details.owner = dest;
 		Asset::<T, I>::insert(&class, &instance, &details);
 
-		Self::deposit_event(Event::Transferred(class, instance, origin, details.owner));
+		Self::deposit_event(Event::Transferred {
+			class,
+			instance,
+			from: origin,
+			to: details.owner,
+		});
 		Ok(())
 	}
 
-	pub(super) fn do_create_class(
+	pub fn do_create_class(
 		class: T::ClassId,
 		owner: T::AccountId,
 		admin: T::AccountId,
@@ -76,11 +82,48 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			},
 		);
 
+		ClassAccount::<T, I>::insert(&owner, &class, ());
 		Self::deposit_event(event);
 		Ok(())
 	}
 
-	pub(super) fn do_mint(
+	pub fn do_destroy_class(
+		class: T::ClassId,
+		witness: DestroyWitness,
+		maybe_check_owner: Option<T::AccountId>,
+	) -> Result<DestroyWitness, DispatchError> {
+		Class::<T, I>::try_mutate_exists(class, |maybe_details| {
+			let class_details = maybe_details.take().ok_or(Error::<T, I>::UnknownClass)?;
+			if let Some(check_owner) = maybe_check_owner {
+				ensure!(class_details.owner == check_owner, Error::<T, I>::NoPermission);
+			}
+			ensure!(class_details.instances == witness.instances, Error::<T, I>::BadWitness);
+			ensure!(
+				class_details.instance_metadatas == witness.instance_metadatas,
+				Error::<T, I>::BadWitness
+			);
+			ensure!(class_details.attributes == witness.attributes, Error::<T, I>::BadWitness);
+
+			for (instance, details) in Asset::<T, I>::drain_prefix(&class) {
+				Account::<T, I>::remove((&details.owner, &class, &instance));
+			}
+			InstanceMetadataOf::<T, I>::remove_prefix(&class, None);
+			ClassMetadataOf::<T, I>::remove(&class);
+			Attribute::<T, I>::remove_prefix((&class,), None);
+			ClassAccount::<T, I>::remove(&class_details.owner, &class);
+			T::Currency::unreserve(&class_details.owner, class_details.total_deposit);
+
+			Self::deposit_event(Event::Destroyed { class });
+
+			Ok(DestroyWitness {
+				instances: class_details.instances,
+				instance_metadatas: class_details.instance_metadatas,
+				attributes: class_details.attributes,
+			})
+		})
+	}
+
+	pub fn do_mint(
 		class: T::ClassId,
 		instance: T::InstanceId,
 		owner: T::AccountId,
@@ -89,7 +132,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ensure!(!Asset::<T, I>::contains_key(class, instance), Error::<T, I>::AlreadyExists);
 
 		Class::<T, I>::try_mutate(&class, |maybe_class_details| -> DispatchResult {
-			let class_details = maybe_class_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
+			let class_details = maybe_class_details.as_mut().ok_or(Error::<T, I>::UnknownClass)?;
 
 			with_details(&class_details)?;
 
@@ -111,11 +154,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Ok(())
 		})?;
 
-		Self::deposit_event(Event::Issued(class, instance, owner));
+		Self::deposit_event(Event::Issued { class, instance, owner });
 		Ok(())
 	}
 
-	pub(super) fn do_burn(
+	pub fn do_burn(
 		class: T::ClassId,
 		instance: T::InstanceId,
 		with_details: impl FnOnce(&ClassDetailsFor<T, I>, &InstanceDetailsFor<T, I>) -> DispatchResult,
@@ -123,9 +166,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let owner = Class::<T, I>::try_mutate(
 			&class,
 			|maybe_class_details| -> Result<T::AccountId, DispatchError> {
-				let class_details = maybe_class_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
+				let class_details =
+					maybe_class_details.as_mut().ok_or(Error::<T, I>::UnknownClass)?;
 				let details =
-					Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::Unknown)?;
+					Asset::<T, I>::get(&class, &instance).ok_or(Error::<T, I>::UnknownClass)?;
 				with_details(&class_details, &details)?;
 
 				// Return the deposit.
@@ -139,7 +183,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Asset::<T, I>::remove(&class, &instance);
 		Account::<T, I>::remove((&owner, &class, &instance));
 
-		Self::deposit_event(Event::Burned(class, instance, owner));
+		Self::deposit_event(Event::Burned { class, instance, owner });
 		Ok(())
 	}
 }

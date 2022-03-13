@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -47,6 +47,12 @@ impl frame_support::traits::PalletInfo for PanicPalletInfo {
 		unimplemented!("PanicPalletInfo mustn't be triggered by tests");
 	}
 	fn name<P: 'static>() -> Option<&'static str> {
+		unimplemented!("PanicPalletInfo mustn't be triggered by tests");
+	}
+	fn module_name<P: 'static>() -> Option<&'static str> {
+		unimplemented!("PanicPalletInfo mustn't be triggered by tests");
+	}
+	fn crate_version<P: 'static>() -> Option<frame_support::traits::CrateVersion> {
 		unimplemented!("PanicPalletInfo mustn't be triggered by tests");
 	}
 }
