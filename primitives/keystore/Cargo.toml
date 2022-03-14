@@ -26,7 +26,7 @@ sp-core = { version = "6.0.0", path = "../core" }
 sp-externalities = { version = "0.12.0", path = "../externalities", default-features = false }
 
 [dev-dependencies]
-rand = "0.7.2"
+rand = "0.8.4"
 rand_chacha = "0.2.2"
 
 [features]
