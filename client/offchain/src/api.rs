@@ -24,8 +24,9 @@ pub use http::SharedClient;
 use sc_network::{Multiaddr, PeerId};
 use sp_core::{
 	offchain::{
-		self, HttpError, HttpRequestId, HttpRequestStatus, OffchainStorage, OpaqueMultiaddr,
-		IpfsRequest, IpfsRequestId, IpfsRequestStatus, OpaqueNetworkState, StorageKind, Timestamp,
+		self, HttpError, HttpRequestId, HttpRequestStatus, IpfsRequest, IpfsRequestId,
+		IpfsRequestStatus, OffchainStorage, OpaqueMultiaddr, OpaqueNetworkState, StorageKind,
+		Timestamp,
 	},
 	OpaquePeerId,
 };
@@ -113,8 +114,9 @@ impl<Storage: OffchainStorage> offchain::DbExternalities for Db<Storage> {
 			old_value.as_ref().map(hex::encode),
 		);
 		match kind {
-			StorageKind::PERSISTENT =>
-				self.persistent.compare_and_set(STORAGE_PREFIX, key, old_value, new_value),
+			StorageKind::PERSISTENT => {
+				self.persistent.compare_and_set(STORAGE_PREFIX, key, old_value, new_value)
+			},
 			StorageKind::LOCAL => unavailable_yet(LOCAL_DB),
 		}
 	}
@@ -229,7 +231,7 @@ impl offchain::Externalities for Api {
 	fn ipfs_response_wait(
 		&mut self,
 		ids: &[IpfsRequestId],
-		deadline: Option<Timestamp>
+		deadline: Option<Timestamp>,
 	) -> Vec<IpfsRequestStatus> {
 		self.ipfs.response_wait(ids, deadline)
 	}
@@ -321,17 +323,9 @@ impl<I: ::ipfs::IpfsTypes> AsyncApi<I> {
 		let (http_api, http_worker) = http::http(shared_client);
 		let (ipfs_api, ipfs_worker) = ipfs::ipfs(ipfs_node);
 
-		let api = Api {
-			network_provider,
-			is_validator,
-			http: http_api,
-			ipfs: ipfs_api,
-		};
+		let api = Api { network_provider, is_validator, http: http_api, ipfs: ipfs_api };
 
-		let async_api = Self {
-			http: Some(http_worker),
-			ipfs: Some(ipfs_worker),
-		};
+		let async_api = Self { http: Some(http_worker), ipfs: Some(ipfs_worker) };
 
 		(api, async_api)
 	}
@@ -347,6 +341,7 @@ impl<I: ::ipfs::IpfsTypes> AsyncApi<I> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::helper_types::ipfs_types::IpfsTypesRealType;
 	use sc_client_db::offchain::LocalStorage;
 	use sc_network::{NetworkStateInfo, PeerId};
 	use sp_core::offchain::{DbExternalities, Externalities};
@@ -377,25 +372,20 @@ mod tests {
 		}
 	}
 
-	fn offchain_api() -> (Api, AsyncApi) {
+	fn offchain_api<T: ::ipfs::IpfsTypes>() -> (Api, AsyncApi<T>) {
 		sp_tracing::try_init_simple();
 		let mock = Arc::new(TestNetwork());
 		let shared_client = SharedClient::new();
 
-		let options = ::ipfs::IpfsOptions::default();
+		let options = ::ipfs::IpfsOptions::inmemory_with_generated_keys();
 		let mut rt = tokio::runtime::Runtime::new().unwrap();
 		let ipfs_node = rt.block_on(async move {
-			let (ipfs, fut) = ::ipfs::UninitializedIpfs::new(options, None).await.start().await.unwrap();
+			let (ipfs, fut) = ::ipfs::UninitializedIpfs::new(options).start().await.unwrap();
 			tokio::task::spawn(fut);
 			ipfs
 		});
 
-		AsyncApi::new(
-			mock,
-			ipfs_node,
-			false,
-			shared_client,
-		)
+		AsyncApi::new(mock, ipfs_node, false, shared_client)
 	}
 
 	fn offchain_db() -> Db<LocalStorage> {
@@ -404,7 +394,7 @@ mod tests {
 
 	#[test]
 	fn should_get_timestamp() {
-		let mut api = offchain_api().0;
+		let mut api = offchain_api::<IpfsTypesRealType>().0;
 
 		// Get timestamp from std.
 		let now = SystemTime::now();
@@ -425,7 +415,7 @@ mod tests {
 
 	#[test]
 	fn should_sleep() {
-		let mut api = offchain_api().0;
+		let mut api = offchain_api::<IpfsTypesRealType>().0;
 
 		// Arrange.
 		let now = api.timestamp();
@@ -510,7 +500,7 @@ mod tests {
 	#[test]
 	fn should_get_random_seed() {
 		// given
-		let mut api = offchain_api().0;
+		let mut api = offchain_api::<IpfsTypesRealType>().0;
 		let seed = api.random_seed();
 		// then
 		assert_ne!(seed, [0; 32]);

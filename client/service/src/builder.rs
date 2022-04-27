@@ -205,8 +205,9 @@ impl KeystoreContainer {
 	/// Construct KeystoreContainer
 	pub fn new(config: &KeystoreConfig) -> Result<Self, Error> {
 		let keystore = Arc::new(match config {
-			KeystoreConfig::Path { path, password } =>
-				LocalKeystore::open(path.clone(), password.clone())?,
+			KeystoreConfig::Path { path, password } => {
+				LocalKeystore::open(path.clone(), password.clone())?
+			},
 			KeystoreConfig::InMemory => LocalKeystore::in_memory(),
 		});
 
@@ -284,7 +285,8 @@ where
 {
 	let keystore_container = KeystoreContainer::new(&config.keystore)?;
 
-    let ipfs_rt = tokio::runtime::Runtime::new().expect("couldn't start the IPFS runtime");
+	let ipfs_rt = tokio::runtime::Runtime::new().expect("couldn't start the IPFS runtime");
+	let ipfs_rt = std::sync::Arc::new(parking_lot::Mutex::new(ipfs_rt));
 
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
@@ -372,7 +374,10 @@ where
 	TExec: CodeExecutor + RuntimeVersionOf + Clone,
 {
 	let keystore_container = KeystoreContainer::new(&config.keystore)?;
+
 	let ipfs_rt = tokio::runtime::Runtime::new().expect("couldn't start the IPFS runtime");
+	let ipfs_rt = std::sync::Arc::new(parking_lot::Mutex::new(ipfs_rt));
+
 	let task_manager = {
 		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
 		TaskManager::new(config.tokio_handle.clone(), ipfs_rt, registry)?
@@ -507,7 +512,8 @@ where
 	TCl: Send + Sync + ProvideRuntimeApi<TBl> + BlockchainEvents<TBl> + 'static,
 	<TCl as ProvideRuntimeApi<TBl>>::Api: sc_offchain::OffchainWorkerApi<TBl>,
 {
-	let offchain_workers = Some(Arc::new(sc_offchain::OffchainWorkers::new(client.clone(), ipfs_rt)));
+	let offchain_workers =
+		Some(Arc::new(sc_offchain::OffchainWorkers::new(client.clone(), ipfs_rt)));
 
 	// Inform the offchain worker about new imported blocks
 	if let Some(offchain) = offchain_workers.clone() {
@@ -905,8 +911,8 @@ where
 			let (handler, protocol_config) = BlockRequestHandler::new(
 				&protocol_id,
 				client.clone(),
-				config.network.default_peers_set.in_peers as usize +
-					config.network.default_peers_set.out_peers as usize,
+				config.network.default_peers_set.in_peers as usize
+					+ config.network.default_peers_set.out_peers as usize,
 			);
 			spawn_handle.spawn("block_request_handler", handler.run());
 			protocol_config
@@ -922,8 +928,8 @@ where
 			let (handler, protocol_config) = StateRequestHandler::new(
 				&protocol_id,
 				client.clone(),
-				config.network.default_peers_set.in_peers as usize +
-					config.network.default_peers_set.out_peers as usize,
+				config.network.default_peers_set.in_peers as usize
+					+ config.network.default_peers_set.out_peers as usize,
 			);
 			spawn_handle.spawn("state_request_handler", handler.run());
 			protocol_config
@@ -1037,7 +1043,7 @@ where
 			);
 			// This `return` might seem unnecessary, but we don't want to make it look like
 			// everything is working as normal even though the user is clearly misusing the API.
-			return
+			return;
 		}
 
 		future.await

@@ -3,5 +3,3 @@ error[E0277]: the trait bound `<T as Config>::C: std::default::Default` is not s
   |
 7 |     c: T::C,
   |     ^ the trait `std::default::Default` is not implemented for `<T as Config>::C`
-  |
-  = note: required by `std::default::Default::default`

@@ -1,7 +1,39 @@
+warning: an associated function with this name may be added to the standard library in the future
+   --> $DIR/validated_pool.rs:206:44
+    |
+206 |                     self.import_notification_sinks.lock().retain_mut(|sink| {
+    |                                                           ^^^^^^^^^^
+    |
+    = note: `#[warn(unstable_name_collisions)]` on by default
+    = warning: once this associated item is added to the standard library, the ambiguity may cause an error or change in behavior!
+    = note: for more information, see issue #48919 <https://github.com/rust-lang/rust/issues/48919>
+    = help: call with fully qualified syntax `retain_mut(...)` to keep using the current method
+
+warning: unused return value of `Box::<T>::pin` that must be used
+   --> $DIR/lib.rs:501:4
+    |
+501 |             Box::pin(futures::future::ready(TransactionImport::None));
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_must_use)]` on by default
+
+warning: unused attribute `allow`
+  --> $DIR/trait_tests.rs:70:2
+   |
+70 |     #[allow(deprecated)]
+   |     ^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_attributes)]` on by default
+note: the built-in attribute `allow` will be ignored, since it's applied to the macro invocation `assert_eq`
+  --> $DIR/trait_tests.rs:71:2
+   |
+71 |     assert_eq!(blockchain.leaves().unwrap(), vec![a2.hash()]);
+   |     ^^^^^^^^^
+
 error: No api implementation given!
   --> $DIR/empty_impl_runtime_apis_call.rs:17:1
    |
 17 | sp_api::impl_runtime_apis! {}
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
-   = note: this error originates in a macro (in Nightly builds, run with -Z macro-backtrace for more info)
+   = note: this error originates in the macro `sp_api::impl_runtime_apis` (in Nightly builds, run with -Z macro-backtrace for more info)

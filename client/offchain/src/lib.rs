@@ -53,6 +53,7 @@ use sp_runtime::{
 use threadpool::ThreadPool;
 
 mod api;
+mod helper_types;
 
 pub use api::Db as OffchainDb;
 pub use sp_offchain::{OffchainWorkerApi, STORAGE_PREFIX};
@@ -96,20 +97,23 @@ impl<Client, Block: traits::Block> OffchainWorkers<Client, Block> {
 		let shared_client = api::SharedClient::new();
 
 		let (ipfs_node, node_info) = std::thread::spawn(move || {
-		let ipfs_rt = ipfs_rt.lock();
-		let options = ipfs::IpfsOptions::inmemory_with_generated_keys();
-		ipfs_rt.block_on(async move {
-		// Start daemon and initialize repo
-		let (ipfs, fut) = ipfs::UninitializedIpfs::new(options).start().await.unwrap();
-		tokio::task::spawn(fut);
-		let node_info = ipfs.identity().await.unwrap();
-		(ipfs, node_info)
+			let ipfs_rt = ipfs_rt.lock();
+			let options = ipfs::IpfsOptions::inmemory_with_generated_keys();
+			ipfs_rt.block_on(async move {
+				// Start daemon and initialize repo
+				let (ipfs, fut) = ipfs::UninitializedIpfs::new(options).start().await.unwrap();
+				tokio::task::spawn(fut);
+				let node_info = ipfs.identity().await.unwrap();
+				(ipfs, node_info)
+			})
 		})
-		}).join().expect("couldn't start the IPFS async runtime");
+		.join()
+		.expect("couldn't start the IPFS async runtime");
 
 		log::info!(
-		"IPFS: node started with PeerId {} and addresses {:?}",
-		node_info.0.into_peer_id(), node_info.1
+			"IPFS: node started with PeerId {} and addresses {:?}",
+			node_info.0.into_peer_id(),
+			node_info.1
 		);
 
 		Self {
@@ -165,7 +169,7 @@ where
 				network_provider,
 				self.ipfs_node.clone(),
 				is_validator,
-				self.shared_client.clone()
+				self.shared_client.clone(),
 			);
 			debug!("Spawning offchain workers at {:?}", at);
 			let header = header.clone();
@@ -314,10 +318,11 @@ mod tests {
 		));
 		let network = Arc::new(TestNetwork());
 		let header = client.header(&BlockId::number(0)).unwrap().unwrap();
-		let mut ipfs_rt = tokio::runtime::Runtime::new().unwrap();
+		let ipfs_rt = tokio::runtime::Runtime::new().unwrap();
+		let ipfs_rt = Arc::new(Mutex::new(ipfs_rt));
 
 		// when
-		let offchain = OffchainWorkers::new(client, &mut ipfs_rt);
+		let offchain = OffchainWorkers::new(client, ipfs_rt);
 		futures::executor::block_on(offchain.on_block_imported(&header, network, false));
 
 		// then

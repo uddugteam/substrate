@@ -28,18 +28,14 @@
 //! assert!(peers.is_empty());
 //! ```
 
-use sp_std::prelude::Vec;
+use sp_core::offchain::{
+	IpfsError, IpfsRequest, IpfsRequestId as RequestId, IpfsRequestStatus as RequestStatus,
+	IpfsResponse, Timestamp,
+};
+use sp_core::RuntimeDebug;
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::vec;
-use sp_core::RuntimeDebug;
-use sp_core::offchain::{
-	Timestamp,
-	IpfsError,
-	IpfsRequest,
-	IpfsRequestId as RequestId,
-	IpfsRequestStatus as RequestStatus,
-	IpfsResponse,
-};
+use sp_std::prelude::Vec;
 
 /// A struct representing an uncompleted IPFS request.
 #[derive(PartialEq, Eq, RuntimeDebug)]
@@ -47,13 +43,14 @@ pub struct PendingRequest {
 	/// Request ID
 	pub id: RequestId,
 	/// Request type
-	pub request: IpfsRequest
+	pub request: IpfsRequest,
 }
 
 impl PendingRequest {
 	/// Creates amd starts a specified request for the IPFS node.
 	pub fn new(request: IpfsRequest) -> Result<Self, IpfsError> {
-		let id = sp_io::offchain::ipfs_request_start(request.clone()).map_err(|_| IpfsError::IoError)?;
+		let id =
+			sp_io::offchain::ipfs_request_start(request.clone()).map_err(|_| IpfsError::IoError)?;
 
 		Ok(PendingRequest { id, request })
 	}
@@ -86,8 +83,13 @@ impl PendingRequest {
 
 	/// Attempts to wait for the request to finish,
 	/// but will return `Err` in case the deadline is reached.
-	pub fn try_wait(self, deadline: impl Into<Option<Timestamp>>) -> Result<IpfsResult, PendingRequest> {
-		Self::try_wait_all(vec![self], deadline).pop().expect("One request passed, one status received; qed")
+	pub fn try_wait(
+		self,
+		deadline: impl Into<Option<Timestamp>>,
+	) -> Result<IpfsResult, PendingRequest> {
+		Self::try_wait_all(vec![self], deadline)
+			.pop()
+			.expect("One request passed, one status received; qed")
 	}
 
 	/// Wait for all provided requests.
@@ -106,7 +108,7 @@ impl PendingRequest {
 	/// Requests that are complete will resolve to an `Ok` others will return a `DeadlineReached` error.
 	pub fn try_wait_all(
 		requests: Vec<PendingRequest>,
-		deadline: impl Into<Option<Timestamp>>
+		deadline: impl Into<Option<Timestamp>>,
 	) -> Vec<Result<IpfsResult, PendingRequest>> {
 		let ids = requests.iter().map(|r| r.id).collect::<Vec<_>>();
 		let statuses = sp_io::offchain::ipfs_response_wait(&ids, deadline.into());
@@ -135,27 +137,21 @@ pub struct Response {
 
 impl Response {
 	fn new(id: RequestId, response: IpfsResponse) -> Self {
-		Self {
-			id,
-			response,
-		}
+		Self { id, response }
 	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use sp_core::offchain::{testing, OffchainWorkerExt};
 	use sp_io::TestExternalities;
-	use sp_core::offchain::{
-		OffchainExt,
-		testing,
-	};
 
 	#[test]
 	fn basic_metadata_request_and_response() {
 		let (offchain, _state) = testing::TestOffchainExt::new();
 		let mut t = TestExternalities::default();
-		t.register_extension(OffchainExt::new(offchain));
+		t.register_extension(OffchainWorkerExt::new(offchain));
 
 		t.execute_with(|| {
 			let identity_request = PendingRequest::new(IpfsRequest::Identity).unwrap();

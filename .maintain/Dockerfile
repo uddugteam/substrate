@@ -1,59 +1,60 @@
-# Note: We don't use Alpine and its packaged Rust/Cargo because they're too often out of date,
-# preventing them from being used to build Substrate/Polkadot.
+FROM  rust:1.58.0-alpine3.15 as builder
+LABEL description="This is the build stage for Offchain::ipfs."
 
-FROM phusion/baseimage:0.11 as builder
-LABEL maintainer="chevdor@gmail.com"
-LABEL description="This is the build stage for Substrate. Here we create the binary."
+WORKDIR /offchain-ipfs
 
-ENV DEBIAN_FRONTEND=noninteractive
+# installs tools and dependecies
+RUN apk update && \
+    apk add --no-cache build-base gcc cmake clang clang-dev openssl-dev \
+	protoc protobuf protobuf-dev git linux-headers ca-certificates
 
-ARG PROFILE=release
-WORKDIR /substrate
+# using
+RUN rustup toolchain install nightly && \
+    rustup target add wasm32-unknown-unknown --toolchain nightly && \
+	rustup component add rustfmt && \
+    rustup default stable && \
+	rustup default 1.58.0
 
-COPY . /substrate
 
-RUN apt-get update && \
-	apt-get dist-upgrade -y -o Dpkg::Options::="--force-confold" && \
-	apt-get install -y cmake pkg-config libssl-dev git clang
+COPY . /offchain-ipfs
 
-RUN curl https://sh.rustup.rs -sSf | sh -s -- -y && \
-	export PATH="$PATH:$HOME/.cargo/bin" && \
-	rustup toolchain install nightly && \
-	rustup target add wasm32-unknown-unknown --toolchain nightly && \
-	rustup default stable && \
-	cargo build "--$PROFILE"
+# locate the protoc binary
+ENV PROTOC=/usr/bin/protoc
 
-# ===== SECOND STAGE ======
+# -L extends the lookup path to system for libstdc++
+# -C codegen option to dynamically link a C runtime
+ENV RUSTFLAGS='-L/usr/lib -Ctarget-feature=-crt-static'
+RUN	cargo build --release
 
-FROM phusion/baseimage:0.11
-LABEL maintainer="chevdor@gmail.com"
-LABEL description="This is the 2nd stage: a very small image where we copy the Substrate binary."
-ARG PROFILE=release
+# Default target
+FROM alpine:3.15
+LABEL co.equilibrium.image.vendor="Equilibrium Co." \
+	co.equilibrium.image.title="offchain-ipfs" \
+	co.equilibrium.image.description="IPFS-powered Substrate chain"
 
-RUN mv /usr/share/ca* /tmp && \
-	rm -rf /usr/share/*  && \
-	mv /tmp/ca-certificates /usr/share/ && \
-	useradd -m -u 1000 -U -s /bin/sh -d /substrate substrate && \
-	mkdir -p /substrate/.local/share/substrate && \
-	chown -R substrate:substrate /substrate/.local && \
-	ln -s /substrate/.local/share/substrate /data
+# install tools and dependencies
+RUN apk update && apk add --no-cache ca-certificates && \
+	rm -vrf /var/cache/apk/*
 
-COPY --from=builder /substrate/target/$PROFILE/substrate /usr/local/bin
-COPY --from=builder /substrate/target/$PROFILE/subkey /usr/local/bin
-COPY --from=builder /substrate/target/$PROFILE/node-rpc-client /usr/local/bin
-COPY --from=builder /substrate/target/$PROFILE/node-template /usr/local/bin
-COPY --from=builder /substrate/target/$PROFILE/chain-spec-builder /usr/local/bin
+# Create base-path directory
+RUN mkdir /offchain-ipfs
 
-# checks
-RUN ldd /usr/local/bin/substrate && \
-	/usr/local/bin/substrate --version
+# Switch from root user and give access to node base-path directory
+RUN addgroup -S ipfsgroup && adduser -S ipfs -G ipfsgroup && chown -R ipfs /offchain-ipfs
+USER ipfs
 
-# Shrinking
-RUN rm -rf /usr/lib/python* && \
-	rm -rf /usr/bin /usr/sbin /usr/share/man
+# add required libraries and binaries
+COPY --from=builder ["/usr/lib/libstdc++.so.6", "/usr/lib/libgcc_s.so.1", "/usr/lib/" ]
+COPY --from=builder ["/offchain-ipfs/target/release/substrate", \
+	"/offchain-ipfs/target/release/node-template","/usr/local/bin/"]
 
-USER substrate
+# check if executables work in this container
+RUN /usr/local/bin/substrate --version && \
+		/usr/local/bin/node-template --version
+
+# expose ports for p2p, JSON-RPC, websocket and prometheus
 EXPOSE 30333 9933 9944 9615
-VOLUME ["/data"]
+VOLUME ["/offchain-ipfs"]
 
-CMD ["/usr/local/bin/substrate"]
+# Default to execute node template on development chain
+CMD ["/usr/local/bin/node-template", "--ws-external", "--rpc-external", "--base-path=/offchain-ipfs", "--dev"]

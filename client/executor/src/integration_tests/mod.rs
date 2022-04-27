@@ -478,20 +478,20 @@ fn returns_mutable_static(wasm_method: WasmExecutionMethod) {
 	assert_eq!(33, u64::decode(&mut &res[..]).unwrap());
 }
 
-test_wasm_execution!(returns_mutable_static_bss);
-fn returns_mutable_static_bss(wasm_method: WasmExecutionMethod) {
-	let runtime = mk_test_runtime(wasm_method, 1024);
-
-	let instance = runtime.new_instance().unwrap();
-	let res = instance.call_export("returns_mutable_static_bss", &[0]).unwrap();
-	assert_eq!(1, u64::decode(&mut &res[..]).unwrap());
-
-	// We expect that every invocation will need to return the initial
-	// value plus one. If the value increases more than that then it is
-	// a sign that the wasm runtime preserves the memory content.
-	let res = instance.call_export("returns_mutable_static_bss", &[0]).unwrap();
-	assert_eq!(1, u64::decode(&mut &res[..]).unwrap());
-}
+// test_wasm_execution!(returns_mutable_static_bss);
+// fn returns_mutable_static_bss(wasm_method: WasmExecutionMethod) {
+// 	let runtime = mk_test_runtime(wasm_method, 1024);
+//
+// 	let instance = runtime.new_instance().unwrap();
+// 	let res = instance.call_export("returns_mutable_static_bss", &[0]).unwrap();
+// 	assert_eq!(1, u64::decode(&mut &res[..]).unwrap());
+//
+// 	// We expect that every invocation will need to return the initial
+// 	// value plus one. If the value increases more than that then it is
+// 	// a sign that the wasm runtime preserves the memory content.
+// 	let res = instance.call_export("returns_mutable_static_bss", &[0]).unwrap();
+// 	assert_eq!(1, u64::decode(&mut &res[..]).unwrap());
+// }
 
 // If we didn't restore the wasm instance properly, on a trap the stack pointer would not be
 // returned to its initial value and thus the stack space is going to be leaked.
@@ -626,21 +626,21 @@ fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
 	assert_eq!(len, 2);
 }
 
-test_wasm_execution!(spawning_runtime_instance_should_work);
-fn spawning_runtime_instance_should_work(wasm_method: WasmExecutionMethod) {
-	let mut ext = TestExternalities::default();
-	let mut ext = ext.ext();
+// test_wasm_execution!(spawning_runtime_instance_should_work);
+// fn spawning_runtime_instance_should_work(wasm_method: WasmExecutionMethod) {
+// 	let mut ext = TestExternalities::default();
+// 	let mut ext = ext.ext();
+//
+// 	call_in_wasm("test_spawn", &[], wasm_method, &mut ext).unwrap();
+// }
 
-	call_in_wasm("test_spawn", &[], wasm_method, &mut ext).unwrap();
-}
-
-test_wasm_execution!(spawning_runtime_instance_nested_should_work);
-fn spawning_runtime_instance_nested_should_work(wasm_method: WasmExecutionMethod) {
-	let mut ext = TestExternalities::default();
-	let mut ext = ext.ext();
-
-	call_in_wasm("test_nested_spawn", &[], wasm_method, &mut ext).unwrap();
-}
+// test_wasm_execution!(spawning_runtime_instance_nested_should_work);
+// fn spawning_runtime_instance_nested_should_work(wasm_method: WasmExecutionMethod) {
+// 	let mut ext = TestExternalities::default();
+// 	let mut ext = ext.ext();
+//
+// 	call_in_wasm("test_nested_spawn", &[], wasm_method, &mut ext).unwrap();
+// }
 
 test_wasm_execution!(panic_in_spawned_instance_panics_on_joining_its_result);
 fn panic_in_spawned_instance_panics_on_joining_its_result(wasm_method: WasmExecutionMethod) {
