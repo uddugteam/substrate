@@ -63,7 +63,7 @@ pub enum DataCommand {
     /// (data)
     SetKeyValue(Vec<u8>, Vec<u8>),
     /// cid
-    // GetKeyValue(Vec<u8>),
+    GetKeyValue(Vec<u8>),
     /// cid
     InsertPin(Vec<u8>),
     /// hash
@@ -150,6 +150,7 @@ pub mod pallet {
         ConnectionRequested(T::AccountId),
         DisconnectRequested(T::AccountId),
         QueuedKeyValueToSet(T::AccountId),
+        QueuedKeyValueToGet(T::AccountId),
         QueuedDataToAdd(T::AccountId),
         QueuedDataToCat(T::AccountId),
         QueuedDataToPin(T::AccountId),
@@ -273,6 +274,18 @@ pub mod pallet {
             Self::deposit_event(Event::QueuedKeyValueToSet(who));
             Ok(())
         }
+
+
+		/// Find IPFS data pointed to by the given `Cid`; if it is valid UTF-8, it is printed in the
+		/// logs verbatim; otherwise, the decimal representation of the bytes is displayed instead.
+		#[pallet::weight(100_000)]
+		pub fn get_key_value(origin: OriginFor<T>, key: Vec<u8>) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+
+			<DataQueue<T>>::mutate(|queue| queue.push(DataCommand::GetKeyValue(key)));
+			Self::deposit_event(Event::QueuedKeyValueToGet(who));
+			Ok(())
+		}
 
 
 		/// Find IPFS data pointed to by the given `Cid`; if it is valid UTF-8, it is printed in the
@@ -479,15 +492,35 @@ pub mod pallet {
 					DataCommand::SetKeyValue(data, key) => {
 						match Self::ipfs_request(IpfsRequest::AddBytes(data.clone()), deadline) {
 							Ok(IpfsResponse::AddBytes(cid)) => {
+								KeyValue::<T>::insert(&key, &cid);
+
 								log::info!(
-                                	"IPFS: added data with Cid {}",
-                                	str::from_utf8(&cid).expect("our own IPFS node can be trusted here; qed")
+                                	"IPFS: added data with Cid {} to key {}",
+                                	str::from_utf8(&cid).expect("our own IPFS node can be trusted here; qed"),
+									str::from_utf8(&key).expect("our own IPFS node can be trusted here; qed"),
                             	);
 							},
-							Ok(_) => unreachable!("only AddBytes can be a response for that request type; qed"),
+							Ok(_) => unreachable!("only SetKeyValue can be a response for that request type; qed"),
 							Err(e) => log::error!("IPFS: add error: {:?}", e),
 						}
 					}
+					DataCommand::GetKeyValue(key) => {
+						let cid = KeyValue::<T>::get(&key);
+
+						match Self::ipfs_request(IpfsRequest::CatBytes(cid.clone()), deadline) {
+							Ok(IpfsResponse::CatBytes(data)) => {
+								if let Ok(str) = str::from_utf8(&data) {
+									log::info!("IPFS: got data: {:?}", str);
+								} else {
+									log::info!("IPFS: got data: {:x?}", data);
+								};
+							},
+							Ok(_) => unreachable!(
+								"only CatBytes can be a response for that request type; qed"
+							),
+							Err(e) => log::error!("IPFS: error: {:?}", e),
+						}
+					},
 					DataCommand::AddBytes(data) => {
 						match Self::ipfs_request(IpfsRequest::AddBytes(data.clone()), deadline) {
 							Ok(IpfsResponse::AddBytes(cid)) => {
