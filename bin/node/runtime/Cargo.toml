@@ -34,7 +34,6 @@ sp-std = { version = "4.0.0-dev", default-features = false, path = "../../../pri
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/api" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/runtime" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/staking" }
-sp-keyring = { version = "4.0.0-dev", optional = true, path = "../../../primitives/keyring" }
 sp-session = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/session" }
 sp-transaction-pool = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/transaction-pool" }
 sp-version = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/version" }
@@ -145,7 +144,6 @@ std = [
 	"sp-runtime/std",
 	"sp-staking/std",
 	"pallet-staking/std",
-	"sp-keyring",
 	"sp-session/std",
 	"pallet-sudo/std",
 	"frame-support/std",
