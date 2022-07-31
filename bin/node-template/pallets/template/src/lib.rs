@@ -58,12 +58,10 @@ pub enum ConnectionCommand {
 
 #[derive(Encode, Decode, RuntimeDebug, PartialEq)]
 pub enum DataCommand {
-    AddBytes(Vec<u8>),
-    CatBytes(Vec<u8>),
-    /// (data)
+    /// key, data
     SetKeyValue(Vec<u8>, Vec<u8>),
     /// cid
-    GetKeyValue(Vec<u8>),
+    GetKeyValue(Vec<u8>, Vec<u8>),
     /// cid
     InsertPin(Vec<u8>),
     /// hash
@@ -150,9 +148,9 @@ pub mod pallet {
         ConnectionRequested(T::AccountId),
         DisconnectRequested(T::AccountId),
         QueuedKeyValueToSet(T::AccountId),
+        KeyValueSet(T::AccountId),
         QueuedKeyValueToGet(T::AccountId),
-        QueuedDataToAdd(T::AccountId),
-        QueuedDataToCat(T::AccountId),
+        KeyValueGot(T::AccountId, Vec<u8>, Vec<u8>),
         QueuedDataToPin(T::AccountId),
         QueuedDataToRemove(T::AccountId),
         QueuedDataToUnpin(T::AccountId),
@@ -255,17 +253,6 @@ pub mod pallet {
 
 		/// Add arbitrary bytes to the IPFS repository. The registered `Cid` is printed out in the
 		/// logs.
-		#[pallet::weight(200_000)]
-		pub fn ipfs_add_bytes(origin: OriginFor<T>, data: Vec<u8>) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-
-			<DataQueue<T>>::mutate(|queue| queue.push(DataCommand::AddBytes(data)));
-			Self::deposit_event(Event::QueuedDataToAdd(who));
-			Ok(())
-		}
-
-        /// Add arbitrary bytes to the IPFS repository. The registered `Cid` is printed out in the
-        /// logs.
         #[pallet::weight(200_000)]
         pub fn set_key_value(origin: OriginFor<T>, data: Vec<u8>, key: Vec<u8>) -> DispatchResult {
             let who = ensure_signed(origin)?;
@@ -275,15 +262,12 @@ pub mod pallet {
             Ok(())
         }
 
-
-		/// Find IPFS data pointed to by the given `Cid`; if it is valid UTF-8, it is printed in the
-		/// logs verbatim; otherwise, the decimal representation of the bytes is displayed instead.
-		#[pallet::weight(100_000)]
-		pub fn get_key_value(origin: OriginFor<T>, key: Vec<u8>) -> DispatchResult {
+		#[pallet::weight(0)]
+		pub fn set_key_value_onchain(origin: OriginFor<T>, key: Vec<u8>, cid: Vec<u8>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
-			<DataQueue<T>>::mutate(|queue| queue.push(DataCommand::GetKeyValue(key)));
-			Self::deposit_event(Event::QueuedKeyValueToGet(who));
+			KeyValue::<T>::insert(&key, &cid);
+			Self::deposit_event(Event::KeyValueSet(who));
 			Ok(())
 		}
 
@@ -291,11 +275,23 @@ pub mod pallet {
 		/// Find IPFS data pointed to by the given `Cid`; if it is valid UTF-8, it is printed in the
 		/// logs verbatim; otherwise, the decimal representation of the bytes is displayed instead.
 		#[pallet::weight(100_000)]
-		pub fn ipfs_cat_bytes(origin: OriginFor<T>, cid: Vec<u8>) -> DispatchResult {
+		pub fn get_key_value(origin: OriginFor<T>, key: Vec<u8>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
-			<DataQueue<T>>::mutate(|queue| queue.push(DataCommand::CatBytes(cid)));
-			Self::deposit_event(Event::QueuedDataToCat(who));
+			let cid = KeyValue::<T>::get(&key);
+
+			<DataQueue<T>>::mutate(|queue| queue.push(DataCommand::GetKeyValue(cid, key)));
+			Self::deposit_event(Event::QueuedKeyValueToGet(who));
+			Ok(())
+		}
+
+
+		/// Fire event with key and requested data
+		#[pallet::weight(100_000)]
+		pub fn get_key_value_onchain(origin: OriginFor<T>, key: Vec<u8>, data: Vec<u8>) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+
+			Self::deposit_event(Event::KeyValueGot(who, key, data));
 			Ok(())
 		}
 
@@ -492,58 +488,50 @@ pub mod pallet {
 					DataCommand::SetKeyValue(data, key) => {
 						match Self::ipfs_request(IpfsRequest::AddBytes(data.clone()), deadline) {
 							Ok(IpfsResponse::AddBytes(cid)) => {
-								KeyValue::<T>::insert(&key, &cid);
-
 								log::info!(
-                                	"IPFS: added data with Cid {} to key {}",
+                                	"JuniDB: added data with Cid {} to key {}",
                                 	str::from_utf8(&cid).expect("our own IPFS node can be trusted here; qed"),
 									str::from_utf8(&key).expect("our own IPFS node can be trusted here; qed"),
                             	);
+
+								let signer = Signer::<T, T::AuthorityId>::all_accounts();
+
+								let results = signer.send_signed_transaction(|_account|
+									Call::set_key_value_onchain ( key.clone(), cid.clone() )
+								);
+
+								for (acc, res) in &results {
+									match res {
+										Ok(()) => log::info!("[{:?}]: submit setKeyValue transaction success.", acc.id),
+										Err(e) => log::error!("[{:?}]: submit transaction failure. Reason: {:?}", acc.id, e),
+									}
+								}
 							},
 							Ok(_) => unreachable!("only SetKeyValue can be a response for that request type; qed"),
 							Err(e) => log::error!("IPFS: add error: {:?}", e),
 						}
 					}
-					DataCommand::GetKeyValue(key) => {
-						let cid = KeyValue::<T>::get(&key);
-
+					DataCommand::GetKeyValue(cid, key) => {
 						match Self::ipfs_request(IpfsRequest::CatBytes(cid.clone()), deadline) {
 							Ok(IpfsResponse::CatBytes(data)) => {
 								if let Ok(str) = str::from_utf8(&data) {
-									log::info!("IPFS: got data: {:?}", str);
+									log::info!("JuniDB: got data: {:?}", str);
 								} else {
-									log::info!("IPFS: got data: {:x?}", data);
+									log::info!("JuniDB: got data: {:x?}", data);
 								};
-							},
-							Ok(_) => unreachable!(
-								"only CatBytes can be a response for that request type; qed"
-							),
-							Err(e) => log::error!("IPFS: error: {:?}", e),
-						}
-					},
-					DataCommand::AddBytes(data) => {
-						match Self::ipfs_request(IpfsRequest::AddBytes(data.clone()), deadline) {
-							Ok(IpfsResponse::AddBytes(cid)) => {
-								log::info!(
-									"IPFS: added data with Cid {}",
-									str::from_utf8(&cid)
-										.expect("our own IPFS node can be trusted here; qed")
+
+								let signer = Signer::<T, T::AuthorityId>::all_accounts();
+
+								let results = signer.send_signed_transaction(|_account|
+									Call::get_key_value_onchain ( key.clone(), data.clone() )
 								);
-							},
-							Ok(_) => unreachable!(
-								"only AddBytes can be a response for that request type; qed"
-							),
-							Err(e) => log::error!("IPFS: add error: {:?}", e),
-						}
-					},
-					DataCommand::CatBytes(data) => {
-						match Self::ipfs_request(IpfsRequest::CatBytes(data.clone()), deadline) {
-							Ok(IpfsResponse::CatBytes(data)) => {
-								if let Ok(str) = str::from_utf8(&data) {
-									log::info!("IPFS: got data: {:?}", str);
-								} else {
-									log::info!("IPFS: got data: {:x?}", data);
-								};
+
+								for (acc, res) in &results {
+									match res {
+										Ok(()) => log::info!("[{:?}]: submit getKeyValue transaction success.", acc.id),
+										Err(e) => log::error!("[{:?}]: submit transaction failure. Reason: {:?}", acc.id, e),
+									}
+								}
 							},
 							Ok(_) => unreachable!(
 								"only CatBytes can be a response for that request type; qed"
