@@ -18,7 +18,7 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
 	"derive",
 ] }
 fnv = "1.0.6"
-futures = "0.3.21"
+futures = "0.3.25"
 hash-db = { version = "0.15.2", default-features = false }
 log = "0.4.17"
 parking_lot = "0.12.1"

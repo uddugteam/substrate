@@ -10,7 +10,7 @@ description = "Transaction pool client facing API."
 
 [dependencies]
 async-trait = "0.1.57"
-futures = "0.3.21"
+futures = "0.3.25"
 log = "0.4.17"
 serde = { version = "1.0.136", features = ["derive"] }
 thiserror = "1.0.30"

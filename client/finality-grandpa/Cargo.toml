@@ -19,7 +19,7 @@ array-bytes = "4.1"
 async-trait = "0.1.57"
 dyn-clone = "1.0"
 finality-grandpa = { version = "0.16.0", features = ["derive-codec"] }
-futures = "0.3.21"
+futures = "0.3.25"
 futures-timer = "3.0.1"
 log = "0.4.17"
 parity-scale-codec = { version = "3.0.0", features = ["derive"] }

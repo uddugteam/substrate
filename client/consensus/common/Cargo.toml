@@ -14,7 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 async-trait = "0.1.57"
-futures = { version = "0.3.21", features = ["thread-pool"] }
+futures = { version = "0.3.25", features = ["thread-pool"] }
 futures-timer = "3.0.1"
 libp2p = { version = "0.49.0", default-features = false }
 log = "0.4.17"

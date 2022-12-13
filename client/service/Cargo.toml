@@ -24,7 +24,7 @@ runtime-benchmarks = ["sc-client-db/runtime-benchmarks"]
 [dependencies]
 jsonrpsee = { version = "0.16.2", features = ["server"] }
 thiserror = "1.0.30"
-futures = "0.3.21"
+futures = "0.3.25"
 rand = "0.7.3"
 parking_lot = "0.12.1"
 log = "0.4.17"

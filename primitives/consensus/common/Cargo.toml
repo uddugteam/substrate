@@ -18,7 +18,7 @@ async-trait = "0.1.57"
 codec = { package = "parity-scale-codec", version = "3.0.0", features = [
 	"derive",
 ] }
-futures = { version = "0.3.21", features = ["thread-pool"] }
+futures = { version = "0.3.25", features = ["thread-pool"] }
 futures-timer = "3.0.1"
 log = "0.4.17"
 thiserror = "1.0.30"
@@ -30,7 +30,7 @@ sp-std = { version = "5.0.0", path = "../../std" }
 sp-version = { version = "5.0.0", path = "../../version" }
 
 [dev-dependencies]
-futures = "0.3.21"
+futures = "0.3.25"
 sp-test-primitives = { version = "2.0.0", path = "../../test-primitives" }
 
 [features]
