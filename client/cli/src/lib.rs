@@ -56,7 +56,7 @@ pub trait SubstrateCli: Sized {
 	///
 	/// By default this will look like this:
 	///
-	/// `2.0.0-b950f731c-x86_64-linux-gnu`
+	/// `2.0.0-b950f731c`
 	///
 	/// Where the hash is the short commit hash of the commit of in the Git repository.
 	fn impl_version() -> String;
@@ -122,16 +122,16 @@ pub trait SubstrateCli: Sized {
 		let app = <Self as CommandFactory>::command();
 
 		let mut full_version = Self::impl_version();
-		full_version.push_str("\n");
+		full_version.push('\n');
 
 		let name = Self::executable_name();
 		let author = Self::author();
 		let about = Self::description();
 		let app = app
 			.name(name)
-			.author(author.as_str())
-			.about(about.as_str())
-			.version(full_version.as_str())
+			.author(author)
+			.about(about)
+			.version(full_version)
 			.propagate_version(true)
 			.args_conflicts_with_subcommands(true)
 			.subcommand_negates_reqs(true);
@@ -153,9 +153,9 @@ pub trait SubstrateCli: Sized {
 	///
 	/// **NOTE:** This method WILL NOT exit when `--help` or `--version` (or short versions) are
 	/// used. It will return a [`clap::Error`], where the [`clap::Error::kind`] is a
-	/// [`clap::ErrorKind::DisplayHelp`] or [`clap::ErrorKind::DisplayVersion`] respectively.
-	/// You must call [`clap::Error::exit`] or perform a [`std::process::exit`].
-	fn try_from_iter<I>(iter: I) -> clap::Result<Self>
+	/// [`clap::error::ErrorKind::DisplayHelp`] or [`clap::error::ErrorKind::DisplayVersion`]
+	/// respectively. You must call [`clap::Error::exit`] or perform a [`std::process::exit`].
+	fn try_from_iter<I>(iter: I) -> clap::error::Result<Self>
 	where
 		Self: Parser + Sized,
 		I: IntoIterator,
@@ -164,16 +164,12 @@ pub trait SubstrateCli: Sized {
 		let app = <Self as CommandFactory>::command();
 
 		let mut full_version = Self::impl_version();
-		full_version.push_str("\n");
+		full_version.push('\n');
 
 		let name = Self::executable_name();
 		let author = Self::author();
 		let about = Self::description();
-		let app = app
-			.name(name)
-			.author(author.as_str())
-			.about(about.as_str())
-			.version(full_version.as_str());
+		let app = app.name(name).author(author).about(about).version(full_version);
 
 		let matches = app.try_get_matches_from(iter)?;
 
@@ -196,7 +192,10 @@ pub trait SubstrateCli: Sized {
 
 	/// Create a runner for the command provided in argument. This will create a Configuration and
 	/// a tokio runtime
-	fn create_runner<T: CliConfiguration>(&self, command: &T) -> error::Result<Runner<Self>> {
+	fn create_runner<T: CliConfiguration<DVC>, DVC: DefaultConfigurationValues>(
+		&self,
+		command: &T,
+	) -> error::Result<Runner<Self>> {
 		let tokio_runtime = build_runtime()?;
 		let config = command.create_configuration(self, tokio_runtime.handle().clone())?;
 

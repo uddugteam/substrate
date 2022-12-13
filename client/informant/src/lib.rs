@@ -22,10 +22,8 @@ use ansi_term::Colour;
 use futures::prelude::*;
 use futures_timer::Delay;
 use log::{debug, info, trace};
-use parity_util_mem::MallocSizeOf;
 use sc_client_api::{BlockchainEvents, UsageProvider};
-use sc_network::NetworkService;
-use sc_transaction_pool_api::TransactionPool;
+use sc_network_common::service::NetworkStatusProvider;
 use sp_blockchain::HeaderMetadata;
 use sp_runtime::traits::{Block as BlockT, Header};
 use std::{collections::VecDeque, fmt::Display, sync::Arc, time::Duration};
@@ -53,15 +51,11 @@ impl Default for OutputFormat {
 }
 
 /// Builds the informant and returns a `Future` that drives the informant.
-pub async fn build<B: BlockT, C, P>(
-	client: Arc<C>,
-	network: Arc<NetworkService<B, <B as BlockT>::Hash>>,
-	pool: Arc<P>,
-	format: OutputFormat,
-) where
+pub async fn build<B: BlockT, C, N>(client: Arc<C>, network: N, format: OutputFormat)
+where
+	N: NetworkStatusProvider<B>,
 	C: UsageProvider<B> + HeaderMetadata<B> + BlockchainEvents<B>,
 	<C as HeaderMetadata<B>>::Error: Display,
-	P: TransactionPool + MallocSizeOf,
 {
 	let mut display = display::InformantDisplay::new(format.clone());
 
@@ -82,11 +76,6 @@ pub async fn build<B: BlockT, C, P>(
 					"Usage statistics not displayed as backend does not provide it",
 				)
 			}
-			trace!(
-				target: "usage",
-				"Subsystems memory [txpool: {} kB]",
-				parity_util_mem::malloc_size(&*pool) / 1024,
-			);
 			display.display(&info, net_status);
 			future::ready(())
 		});
@@ -116,7 +105,7 @@ where
 		if let Some((ref last_num, ref last_hash)) = last_best {
 			if n.header.parent_hash() != last_hash && n.is_new_best {
 				let maybe_ancestor =
-					sp_blockchain::lowest_common_ancestor(&*client, last_hash.clone(), n.hash);
+					sp_blockchain::lowest_common_ancestor(&*client, *last_hash, n.hash);
 
 				match maybe_ancestor {
 					Ok(ref ancestor) if ancestor.hash != *last_hash => info!(
@@ -135,13 +124,13 @@ where
 		}
 
 		if n.is_new_best {
-			last_best = Some((n.header.number().clone(), n.hash.clone()));
+			last_best = Some((*n.header.number(), n.hash));
 		}
 
 		// If we already printed a message for a given block recently,
 		// we should not print it again.
 		if !last_blocks.contains(&n.hash) {
-			last_blocks.push_back(n.hash.clone());
+			last_blocks.push_back(n.hash);
 
 			if last_blocks.len() > max_blocks_to_track {
 				last_blocks.pop_front();

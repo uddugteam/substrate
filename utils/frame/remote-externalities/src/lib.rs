@@ -22,13 +22,6 @@
 
 use codec::{Decode, Encode};
 
-use jsonrpsee::{
-	core::{client::ClientT, Error as RpcError},
-	proc_macros::rpc,
-	rpc_params,
-	ws_client::{WsClient, WsClientBuilder},
-};
-
 use log::*;
 use serde::de::DeserializeOwned;
 use sp_core::{
@@ -46,8 +39,9 @@ use std::{
 	path::{Path, PathBuf},
 	sync::Arc,
 };
-
-pub mod rpc_api;
+use substrate_rpc_client::{
+	rpc_params, ws_client, BatchRequestBuilder, ChainApi, ClientT, StateApi, WsClient,
+};
 
 type KeyValue = (StorageKey, StorageData);
 type TopKeyValues = Vec<KeyValue>;
@@ -56,41 +50,7 @@ type ChildKeyValues = Vec<(ChildInfo, Vec<KeyValue>)>;
 const LOG_TARGET: &str = "remote-ext";
 const DEFAULT_TARGET: &str = "wss://rpc.polkadot.io:443";
 const BATCH_SIZE: usize = 1000;
-const PAGE: u32 = 512;
-
-#[rpc(client)]
-pub trait RpcApi<Hash> {
-	#[method(name = "childstate_getKeys")]
-	fn child_get_keys(
-		&self,
-		child_key: PrefixedStorageKey,
-		prefix: StorageKey,
-		hash: Option<Hash>,
-	) -> Result<Vec<StorageKey>, RpcError>;
-
-	#[method(name = "childstate_getStorage")]
-	fn child_get_storage(
-		&self,
-		child_key: PrefixedStorageKey,
-		prefix: StorageKey,
-		hash: Option<Hash>,
-	) -> Result<StorageData, RpcError>;
-
-	#[method(name = "state_getStorage")]
-	fn get_storage(&self, prefix: StorageKey, hash: Option<Hash>) -> Result<StorageData, RpcError>;
-
-	#[method(name = "state_getKeysPaged")]
-	fn get_keys_paged(
-		&self,
-		prefix: Option<StorageKey>,
-		count: u32,
-		start_key: Option<StorageKey>,
-		hash: Option<Hash>,
-	) -> Result<Vec<StorageKey>, RpcError>;
-
-	#[method(name = "chain_getFinalizedHead")]
-	fn finalized_head(&self) -> Result<Hash, RpcError>;
-}
+const PAGE: u32 = 1000;
 
 /// The execution mode.
 #[derive(Clone)]
@@ -130,7 +90,7 @@ pub enum Transport {
 impl Transport {
 	fn as_client(&self) -> Option<&WsClient> {
 		match self {
-			Self::RemoteClient(client) => Some(&*client),
+			Self::RemoteClient(client) => Some(client),
 			_ => None,
 		}
 	}
@@ -140,14 +100,10 @@ impl Transport {
 		if let Self::Uri(uri) = self {
 			log::debug!(target: LOG_TARGET, "initializing remote client to {:?}", uri);
 
-			let ws_client = WsClientBuilder::default()
-				.max_request_body_size(u32::MAX)
-				.build(&uri)
-				.await
-				.map_err(|e| {
-					log::error!(target: LOG_TARGET, "error: {:?}", e);
-					"failed to build ws client"
-				})?;
+			let ws_client = ws_client(uri).await.map_err(|e| {
+				log::error!(target: LOG_TARGET, "error: {:?}", e);
+				"failed to build ws client"
+			})?;
 
 			*self = Self::RemoteClient(Arc::new(ws_client))
 		}
@@ -258,7 +214,7 @@ pub struct Builder<B: BlockT> {
 
 // NOTE: ideally we would use `DefaultNoBound` here, but not worth bringing in frame-support for
 // that.
-impl<B: BlockT + DeserializeOwned> Default for Builder<B> {
+impl<B: BlockT> Default for Builder<B> {
 	fn default() -> Self {
 		Self {
 			mode: Default::default(),
@@ -272,11 +228,11 @@ impl<B: BlockT + DeserializeOwned> Default for Builder<B> {
 }
 
 // Mode methods
-impl<B: BlockT + DeserializeOwned> Builder<B> {
+impl<B: BlockT> Builder<B> {
 	fn as_online(&self) -> &OnlineConfig<B> {
 		match &self.mode {
-			Mode::Online(config) => &config,
-			Mode::OfflineOrElseOnline(_, config) => &config,
+			Mode::Online(config) => config,
+			Mode::OfflineOrElseOnline(_, config) => config,
 			_ => panic!("Unexpected mode: Online"),
 		}
 	}
@@ -291,26 +247,38 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 }
 
 // RPC methods
-impl<B: BlockT + DeserializeOwned> Builder<B> {
+impl<B: BlockT> Builder<B>
+where
+	B::Hash: DeserializeOwned,
+	B::Header: DeserializeOwned,
+{
 	async fn rpc_get_storage(
 		&self,
 		key: StorageKey,
 		maybe_at: Option<B::Hash>,
 	) -> Result<StorageData, &'static str> {
 		trace!(target: LOG_TARGET, "rpc: get_storage");
-		self.as_online().rpc_client().get_storage(key, maybe_at).await.map_err(|e| {
-			error!(target: LOG_TARGET, "Error = {:?}", e);
-			"rpc get_storage failed."
-		})
+		match self.as_online().rpc_client().storage(key, maybe_at).await {
+			Ok(Some(res)) => Ok(res),
+			Ok(None) => Err("get_storage not found"),
+			Err(e) => {
+				error!(target: LOG_TARGET, "Error = {:?}", e);
+				Err("rpc get_storage failed.")
+			},
+		}
 	}
 
 	/// Get the latest finalized head.
 	async fn rpc_get_head(&self) -> Result<B::Hash, &'static str> {
 		trace!(target: LOG_TARGET, "rpc: finalized_head");
-		self.as_online().rpc_client().finalized_head().await.map_err(|e| {
-			error!(target: LOG_TARGET, "Error = {:?}", e);
-			"rpc finalized_head failed."
-		})
+
+		// sadly this pretty much unreadable...
+		ChainApi::<(), _, B::Header, ()>::finalized_head(self.as_online().rpc_client())
+			.await
+			.map_err(|e| {
+				error!(target: LOG_TARGET, "Error = {:?}", e);
+				"rpc finalized_head failed."
+			})
 	}
 
 	/// Get all the keys at `prefix` at `hash` using the paged, safe RPC methods.
@@ -325,7 +293,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 			let page = self
 				.as_online()
 				.rpc_client()
-				.get_keys_paged(Some(prefix.clone()), PAGE, last_key.clone(), Some(at))
+				.storage_keys_paged(Some(prefix.clone()), PAGE, last_key.clone(), Some(at))
 				.await
 				.map_err(|e| {
 					error!(target: LOG_TARGET, "Error = {:?}", e);
@@ -368,33 +336,50 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 		log::debug!(target: LOG_TARGET, "Querying a total of {} keys", keys.len());
 
 		let mut key_values: Vec<KeyValue> = vec![];
+		let mut batch_success = true;
+
 		let client = self.as_online().rpc_client();
 		for chunk_keys in keys.chunks(BATCH_SIZE) {
-			let batch = chunk_keys
-				.iter()
-				.cloned()
-				.map(|key| ("state_getStorage", rpc_params![key, at]))
-				.collect::<Vec<_>>();
+			let mut batch = BatchRequestBuilder::new();
 
-			let values = client.batch_request::<Option<StorageData>>(batch).await.map_err(|e| {
-				log::error!(
-					target: LOG_TARGET,
-					"failed to execute batch: {:?}. Error: {:?}",
-					chunk_keys.iter().map(|k| HexDisplay::from(k)).collect::<Vec<_>>(),
-					e
-				);
-				"batch failed."
-			})?;
+			for key in chunk_keys.iter() {
+				batch
+					.insert("state_getStorage", rpc_params![key, at])
+					.map_err(|_| "Invalid batch params")?;
+			}
 
-			assert_eq!(chunk_keys.len(), values.len());
+			let batch_response =
+				client.batch_request::<Option<StorageData>>(batch).await.map_err(|e| {
+					log::error!(
+						target: LOG_TARGET,
+						"failed to execute batch: {:?}. Error: {:?}",
+						chunk_keys.iter().map(HexDisplay::from).collect::<Vec<_>>(),
+						e
+					);
+					"batch failed."
+				})?;
 
-			for (idx, key) in chunk_keys.into_iter().enumerate() {
-				let maybe_value = values[idx].clone();
-				let value = maybe_value.unwrap_or_else(|| {
-					log::warn!(target: LOG_TARGET, "key {:?} had none corresponding value.", &key);
-					StorageData(vec![])
-				});
-				key_values.push((key.clone(), value));
+			assert_eq!(chunk_keys.len(), batch_response.len());
+
+			for (key, maybe_value) in chunk_keys.into_iter().zip(batch_response) {
+				match maybe_value {
+					Ok(Some(v)) => {
+						key_values.push((key.clone(), v));
+					},
+					Ok(None) => {
+						log::warn!(
+							target: LOG_TARGET,
+							"key {:?} had none corresponding value.",
+							&key
+						);
+						key_values.push((key.clone(), StorageData(vec![])));
+					},
+					Err(e) => {
+						log::error!(target: LOG_TARGET, "key {:?} failed: {:?}", &key, e);
+						batch_success = false;
+					},
+				};
+
 				if key_values.len() % (10 * BATCH_SIZE) == 0 {
 					let ratio: f64 = key_values.len() as f64 / keys_count as f64;
 					log::debug!(
@@ -408,7 +393,11 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 			}
 		}
 
-		Ok(key_values)
+		if batch_success {
+			Ok(key_values)
+		} else {
+			Err("batch failed.")
+		}
 	}
 
 	/// Get the values corresponding to `child_keys` at the given `prefixed_top_key`.
@@ -419,12 +408,14 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 		at: B::Hash,
 	) -> Result<Vec<KeyValue>, &'static str> {
 		let mut child_kv_inner = vec![];
+		let mut batch_success = true;
+
 		for batch_child_key in child_keys.chunks(BATCH_SIZE) {
-			let batch_request = batch_child_key
-				.iter()
-				.cloned()
-				.map(|key| {
-					(
+			let mut batch_request = BatchRequestBuilder::new();
+
+			for key in batch_child_key {
+				batch_request
+					.insert(
 						"childstate_getStorage",
 						rpc_params![
 							PrefixedStorageKey::new(prefixed_top_key.as_ref().to_vec()),
@@ -432,8 +423,8 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 							at
 						],
 					)
-				})
-				.collect::<Vec<_>>();
+					.map_err(|_| "Invalid batch params")?;
+			}
 
 			let batch_response = self
 				.as_online()
@@ -452,17 +443,32 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 
 			assert_eq!(batch_child_key.len(), batch_response.len());
 
-			for (idx, key) in batch_child_key.into_iter().enumerate() {
-				let maybe_value = batch_response[idx].clone();
-				let value = maybe_value.unwrap_or_else(|| {
-					log::warn!(target: LOG_TARGET, "key {:?} had none corresponding value.", &key);
-					StorageData(vec![])
-				});
-				child_kv_inner.push((key.clone(), value));
+			for (key, maybe_value) in batch_child_key.iter().zip(batch_response) {
+				match maybe_value {
+					Ok(Some(v)) => {
+						child_kv_inner.push((key.clone(), v));
+					},
+					Ok(None) => {
+						log::warn!(
+							target: LOG_TARGET,
+							"key {:?} had none corresponding value.",
+							&key
+						);
+						child_kv_inner.push((key.clone(), StorageData(vec![])));
+					},
+					Err(e) => {
+						log::error!(target: LOG_TARGET, "key {:?} failed: {:?}", &key, e);
+						batch_success = false;
+					},
+				};
 			}
 		}
 
-		Ok(child_kv_inner)
+		if batch_success {
+			Ok(child_kv_inner)
+		} else {
+			Err("batch failed.")
+		}
 	}
 
 	pub(crate) async fn rpc_child_get_keys(
@@ -471,19 +477,19 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 		child_prefix: StorageKey,
 		at: B::Hash,
 	) -> Result<Vec<StorageKey>, &'static str> {
-		let child_keys = self
-			.as_online()
-			.rpc_client()
-			.child_get_keys(
-				PrefixedStorageKey::new(prefixed_top_key.as_ref().to_vec()),
-				child_prefix,
-				Some(at),
-			)
-			.await
-			.map_err(|e| {
-				error!(target: LOG_TARGET, "Error = {:?}", e);
-				"rpc child_get_keys failed."
-			})?;
+		// This is deprecated and will generate a warning which causes the CI to fail.
+		#[allow(warnings)]
+		let child_keys = substrate_rpc_client::ChildStateApi::storage_keys(
+			self.as_online().rpc_client(),
+			PrefixedStorageKey::new(prefixed_top_key.as_ref().to_vec()),
+			child_prefix,
+			Some(at),
+		)
+		.await
+		.map_err(|e| {
+			error!(target: LOG_TARGET, "Error = {:?}", e);
+			"rpc child_get_keys failed."
+		})?;
 
 		debug!(
 			target: LOG_TARGET,
@@ -497,7 +503,11 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 }
 
 // Internal methods
-impl<B: BlockT + DeserializeOwned> Builder<B> {
+impl<B: BlockT> Builder<B>
+where
+	B::Hash: DeserializeOwned,
+	B::Header: DeserializeOwned,
+{
 	/// Save the given data to the top keys snapshot.
 	fn save_top_snapshot(&self, data: &[KeyValue], path: &PathBuf) -> Result<(), &'static str> {
 		let mut path = path.clone();
@@ -571,7 +581,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 		&self,
 		top_kv: &[KeyValue],
 	) -> Result<ChildKeyValues, &'static str> {
-		let child_kv = self.load_child_remote(&top_kv).await?;
+		let child_kv = self.load_child_remote(top_kv).await?;
 		if let Some(c) = &self.as_online().state_snapshot {
 			self.save_child_snapshot(&child_kv, &c.path)?;
 		}
@@ -612,7 +622,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 				},
 			};
 
-			child_kv.push((ChildInfo::new_default(&un_prefixed), child_kv_inner));
+			child_kv.push((ChildInfo::new_default(un_prefixed), child_kv_inner));
 		}
 
 		Ok(child_kv)
@@ -624,8 +634,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 		let at = self
 			.as_online()
 			.at
-			.expect("online config must be initialized by this point; qed.")
-			.clone();
+			.expect("online config must be initialized by this point; qed.");
 		log::info!(target: LOG_TARGET, "scraping key-pairs from remote @ {:?}", at);
 
 		let mut keys_and_values = if config.pallets.len() > 0 {
@@ -727,12 +736,13 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 
 		let child_kv = match self.mode.clone() {
 			Mode::Online(_) => self.load_child_remote_and_maybe_save(&top_kv).await?,
-			Mode::OfflineOrElseOnline(offline_config, _) =>
+			Mode::OfflineOrElseOnline(offline_config, _) => {
 				if let Ok(kv) = self.load_child_snapshot(&offline_config.state_snapshot.path) {
 					kv
 				} else {
 					self.load_child_remote_and_maybe_save(&top_kv).await?
-				},
+				}
+			},
 			Mode::Offline(ref config) => self
 				.load_child_snapshot(&config.state_snapshot.path)
 				.map_err(|why| {
@@ -750,7 +760,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 }
 
 // Public methods
-impl<B: BlockT + DeserializeOwned> Builder<B> {
+impl<B: BlockT> Builder<B> {
 	/// Create a new builder.
 	pub fn new() -> Self {
 		Default::default()
@@ -766,6 +776,8 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 
 	/// Inject a hashed prefix. This is treated as-is, and should be pre-hashed.
 	///
+	/// Only relevant is `Mode::Online` is being used. Noop otherwise.
+	///
 	/// This should be used to inject a "PREFIX", like a storage (double) map.
 	pub fn inject_hashed_prefix(mut self, hashed: &[u8]) -> Self {
 		self.hashed_prefixes.push(hashed.to_vec());
@@ -774,6 +786,8 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 
 	/// Just a utility wrapper of [`Self::inject_hashed_prefix`] that injects
 	/// [`DEFAULT_CHILD_STORAGE_KEY_PREFIX`] as a prefix.
+	///
+	/// Only relevant is `Mode::Online` is being used. Noop otherwise.
 	///
 	/// If set, this will guarantee that the child-tree data of ALL pallets will be downloaded.
 	///
@@ -789,6 +803,8 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 	}
 
 	/// Inject a hashed key to scrape. This is treated as-is, and should be pre-hashed.
+	///
+	/// Only relevant is `Mode::Online` is being used. Noop otherwise.
 	///
 	/// This should be used to inject a "KEY", like a storage value.
 	pub fn inject_hashed_key(mut self, hashed: &[u8]) -> Self {
@@ -825,7 +841,13 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 		}
 		self
 	}
+}
 
+// Public methods
+impl<B: BlockT> Builder<B>
+where
+	B::Header: DeserializeOwned,
+{
 	/// Build the test externalities.
 	pub async fn build(self) -> Result<TestExternalities, &'static str> {
 		let state_version = self.state_version;
@@ -848,7 +870,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 		info!(
 			target: LOG_TARGET,
 			"injecting a total of {} child keys",
-			child_kv.iter().map(|(_, kv)| kv).flatten().count()
+			child_kv.iter().flat_map(|(_, kv)| kv).count()
 		);
 
 		for (info, key_values) in child_kv {
@@ -935,7 +957,6 @@ mod tests {
 #[cfg(all(test, feature = "remote-test"))]
 mod remote_tests {
 	use super::test_prelude::*;
-	const REMOTE_INACCESSIBLE: &'static str = "Can't reach the remote node. Is it running?";
 
 	#[tokio::test]
 	async fn offline_else_online_works() {
@@ -954,7 +975,7 @@ mod remote_tests {
 			))
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 
 		// this shows that in the second run, we are not using the remote
@@ -972,7 +993,7 @@ mod remote_tests {
 			))
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 
 		let to_delete = std::fs::read_dir(Path::new("."))
@@ -1002,7 +1023,7 @@ mod remote_tests {
 			}))
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 	}
 
@@ -1017,7 +1038,7 @@ mod remote_tests {
 			}))
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 
 		Builder::<Block>::new()
@@ -1028,7 +1049,7 @@ mod remote_tests {
 			}))
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 	}
 
@@ -1043,7 +1064,7 @@ mod remote_tests {
 			}))
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 
 		Builder::<Block>::new()
@@ -1054,7 +1075,7 @@ mod remote_tests {
 			}))
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 	}
 
@@ -1069,7 +1090,7 @@ mod remote_tests {
 			}))
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 
 		let to_delete = std::fs::read_dir(Path::new("."))
@@ -1099,21 +1120,6 @@ mod remote_tests {
 	}
 
 	#[tokio::test]
-	async fn can_build_child_tree() {
-		init_logger();
-		Builder::<Block>::new()
-			.mode(Mode::Online(OnlineConfig {
-				transport: "wss://rpc.polkadot.io:443".to_owned().into(),
-				pallets: vec!["Crowdloan".to_owned()],
-				..Default::default()
-			}))
-			.build()
-			.await
-			.expect(REMOTE_INACCESSIBLE)
-			.execute_with(|| {});
-	}
-
-	#[tokio::test]
 	async fn can_create_child_snapshot() {
 		init_logger();
 		Builder::<Block>::new()
@@ -1125,7 +1131,7 @@ mod remote_tests {
 			.inject_default_child_tree_prefix()
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 
 		let to_delete = std::fs::read_dir(Path::new("."))
@@ -1163,7 +1169,7 @@ mod remote_tests {
 			}))
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 
 		let to_delete = std::fs::read_dir(Path::new("."))
@@ -1196,15 +1202,13 @@ mod remote_tests {
 		init_logger();
 		Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
-				// transport: "wss://kusama-rpc.polkadot.io".to_owned().into(),
-				transport: "ws://kianenigma-archive:9924".to_owned().into(),
-				// transport: "ws://localhost:9999".to_owned().into(),
+				transport: "wss://rpc.polkadot.io:443".to_owned().into(),
 				pallets: vec!["Crowdloan".to_owned()],
 				..Default::default()
 			}))
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 	}
 }

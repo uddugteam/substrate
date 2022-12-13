@@ -15,14 +15,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Substrate inherent extrinsics
+//! Substrate Inherent Extrinsics
 //!
 //! Inherent extrinsics are extrinsics that are inherently added to each block. However, it is up to
-//! runtime implementation to require an inherent for each block or to make it optional. Inherents
-//! are mainly used to pass data from the block producer to the runtime. So, inherents require some
-//! part that is running on the client side and some part that is running on the runtime side. Any
-//! data that is required by an inherent is passed as [`InherentData`] from the client to the
-//! runtime when the inherents are constructed.
+//! the runtime implementation to require an inherent for each block or to make it optional.
+//! Inherents are mainly used to pass data from the block producer to the runtime. So, inherents
+//! require some part that is running on the client side and some part that is running on the
+//! runtime side. Any data that is required by an inherent is passed as [`InherentData`] from the
+//! client to the runtime when the inherents are constructed.
 //!
 //! The process of constructing and applying inherents is the following:
 //!
@@ -56,7 +56,7 @@
 //!
 //! #[async_trait::async_trait]
 //! impl sp_inherents::InherentDataProvider for InherentDataProvider {
-//! 	fn provide_inherent_data(
+//! 	async fn provide_inherent_data(
 //! 		&self,
 //! 		inherent_data: &mut InherentData,
 //! 	) -> Result<(), sp_inherents::Error> {
@@ -106,7 +106,7 @@
 //! # struct InherentDataProvider;
 //! # #[async_trait::async_trait]
 //! # impl sp_inherents::InherentDataProvider for InherentDataProvider {
-//! # 	fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), sp_inherents::Error> {
+//! # 	async fn provide_inherent_data(&self, inherent_data: &mut InherentData) -> Result<(), sp_inherents::Error> {
 //! # 		inherent_data.put_data(INHERENT_IDENTIFIER, &"hello")
 //! # 	}
 //! # 	async fn try_handle_error(
@@ -443,7 +443,7 @@ mod tests {
 
 	#[async_trait::async_trait]
 	impl InherentDataProvider for TestInherentDataProvider {
-		fn provide_inherent_data(&self, data: &mut InherentData) -> Result<(), Error> {
+		async fn provide_inherent_data(&self, data: &mut InherentData) -> Result<(), Error> {
 			data.put_data(TEST_INHERENT_0, &42)
 		}
 
@@ -460,7 +460,7 @@ mod tests {
 	fn create_inherent_data() {
 		let provider = TestInherentDataProvider;
 
-		let inherent_data = provider.create_inherent_data().unwrap();
+		let inherent_data = futures::executor::block_on(provider.create_inherent_data()).unwrap();
 
 		assert_eq!(inherent_data.get_data::<u32>(&TEST_INHERENT_0).unwrap().unwrap(), 42u32);
 	}

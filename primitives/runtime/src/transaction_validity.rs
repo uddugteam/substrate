@@ -21,6 +21,7 @@ use crate::{
 	codec::{Decode, Encode},
 	RuntimeDebug,
 };
+use scale_info::TypeInfo;
 use sp_std::prelude::*;
 
 /// Priority for a transaction. Additive. Higher is better.
@@ -34,7 +35,7 @@ pub type TransactionLongevity = u64;
 pub type TransactionTag = Vec<u8>;
 
 /// An invalid transaction validity.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, Copy, RuntimeDebug)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, Copy, RuntimeDebug, TypeInfo)]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum InvalidTransaction {
 	/// The call of the transaction is not expected.
@@ -76,9 +77,9 @@ pub enum InvalidTransaction {
 	/// malicious validator or a buggy `provide_inherent`. In any case, it can result in
 	/// dangerously overweight blocks and therefore if found, invalidates the block.
 	BadMandatory,
-	/// A transaction with a mandatory dispatch. This is invalid; only inherent extrinsics are
-	/// allowed to have mandatory dispatches.
-	MandatoryDispatch,
+	/// An extrinsic with a mandatory dispatch tried to be validated.
+	/// This is invalid; only inherent extrinsics are allowed to have mandatory dispatches.
+	MandatoryValidation,
 	/// The sending address is disabled or known to be invalid.
 	BadSigner,
 }
@@ -108,8 +109,8 @@ impl From<InvalidTransaction> for &'static str {
 				"Inability to pay some fees (e.g. account balance too low)",
 			InvalidTransaction::BadMandatory =>
 				"A call was labelled as mandatory, but resulted in an Error.",
-			InvalidTransaction::MandatoryDispatch =>
-				"Transaction dispatch is mandatory; transactions may not have mandatory dispatches.",
+			InvalidTransaction::MandatoryValidation =>
+				"Transaction dispatch is mandatory; transactions must not be validated.",
 			InvalidTransaction::Custom(_) => "InvalidTransaction custom error",
 			InvalidTransaction::BadSigner => "Invalid signing address",
 		}
@@ -117,7 +118,7 @@ impl From<InvalidTransaction> for &'static str {
 }
 
 /// An unknown transaction validity.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, Copy, RuntimeDebug)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, Copy, RuntimeDebug, TypeInfo)]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum UnknownTransaction {
 	/// Could not lookup some information that is required to validate the transaction.
@@ -141,7 +142,7 @@ impl From<UnknownTransaction> for &'static str {
 }
 
 /// Errors that can occur while checking the validity of a transaction.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, Copy, RuntimeDebug)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, Copy, RuntimeDebug, TypeInfo)]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum TransactionValidityError {
 	/// The transaction is invalid.
@@ -225,9 +226,7 @@ impl From<UnknownTransaction> for TransactionValidity {
 /// Depending on the source we might apply different validation schemes.
 /// For instance we can disallow specific kinds of transactions if they were not produced
 /// by our local node (for instance off-chain workers).
-#[derive(
-	Copy, Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, parity_util_mem::MallocSizeOf,
-)]
+#[derive(Copy, Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
 pub enum TransactionSource {
 	/// Transaction is already included in block.
 	///

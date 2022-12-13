@@ -34,7 +34,7 @@ use sp_core::RuntimeDebug;
 
 /// Generic header digest.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo, Default)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, parity_util_mem::MallocSizeOf))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct Digest {
 	/// A list of logs in the digest.
 	pub logs: Vec<DigestItem>,
@@ -70,7 +70,6 @@ impl Digest {
 /// Digest item that is able to encode/decode 'system' digest items and
 /// provide opaque access to other items.
 #[derive(PartialEq, Eq, Clone, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(parity_util_mem::MallocSizeOf))]
 pub enum DigestItem {
 	/// A pre-runtime digest.
 	///
@@ -321,7 +320,7 @@ impl<'a> DigestItemRef<'a> {
 	/// Cast this digest item into `PreRuntime`
 	pub fn as_pre_runtime(&self) -> Option<(ConsensusEngineId, &'a [u8])> {
 		match *self {
-			Self::PreRuntime(consensus_engine_id, ref data) => Some((*consensus_engine_id, data)),
+			Self::PreRuntime(consensus_engine_id, data) => Some((*consensus_engine_id, data)),
 			_ => None,
 		}
 	}
@@ -329,7 +328,7 @@ impl<'a> DigestItemRef<'a> {
 	/// Cast this digest item into `Consensus`
 	pub fn as_consensus(&self) -> Option<(ConsensusEngineId, &'a [u8])> {
 		match *self {
-			Self::Consensus(consensus_engine_id, ref data) => Some((*consensus_engine_id, data)),
+			Self::Consensus(consensus_engine_id, data) => Some((*consensus_engine_id, data)),
 			_ => None,
 		}
 	}
@@ -337,7 +336,7 @@ impl<'a> DigestItemRef<'a> {
 	/// Cast this digest item into `Seal`
 	pub fn as_seal(&self) -> Option<(ConsensusEngineId, &'a [u8])> {
 		match *self {
-			Self::Seal(consensus_engine_id, ref data) => Some((*consensus_engine_id, data)),
+			Self::Seal(consensus_engine_id, data) => Some((*consensus_engine_id, data)),
 			_ => None,
 		}
 	}
@@ -345,7 +344,7 @@ impl<'a> DigestItemRef<'a> {
 	/// Cast this digest item into `PreRuntime`
 	pub fn as_other(&self) -> Option<&'a [u8]> {
 		match *self {
-			Self::Other(ref data) => Some(data),
+			Self::Other(data) => Some(data),
 			_ => None,
 		}
 	}

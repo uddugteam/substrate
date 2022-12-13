@@ -39,9 +39,9 @@ use bytes::BytesMut;
 use futures::prelude::*;
 use libp2p::core::{upgrade, InboundUpgrade, OutboundUpgrade, UpgradeInfo};
 use log::{error, warn};
+use sc_network_common::protocol::ProtocolName;
 use std::{
-	borrow::Cow,
-	convert::{Infallible, TryFrom as _},
+	convert::Infallible,
 	io, mem,
 	pin::Pin,
 	task::{Context, Poll},
@@ -58,7 +58,7 @@ const MAX_HANDSHAKE_SIZE: usize = 1024;
 pub struct NotificationsIn {
 	/// Protocol name to use when negotiating the substream.
 	/// The first one is the main name, while the other ones are fall backs.
-	protocol_names: Vec<Cow<'static, str>>,
+	protocol_names: Vec<ProtocolName>,
 	/// Maximum allowed size for a single notification.
 	max_notification_size: u64,
 }
@@ -69,7 +69,7 @@ pub struct NotificationsIn {
 pub struct NotificationsOut {
 	/// Protocol name to use when negotiating the substream.
 	/// The first one is the main name, while the other ones are fall backs.
-	protocol_names: Vec<Cow<'static, str>>,
+	protocol_names: Vec<ProtocolName>,
 	/// Message to send when we start the handshake.
 	initial_message: Vec<u8>,
 	/// Maximum allowed size for a single notification.
@@ -114,8 +114,8 @@ pub struct NotificationsOutSubstream<TSubstream> {
 impl NotificationsIn {
 	/// Builds a new potential upgrade.
 	pub fn new(
-		main_protocol_name: impl Into<Cow<'static, str>>,
-		fallback_names: Vec<Cow<'static, str>>,
+		main_protocol_name: impl Into<ProtocolName>,
+		fallback_names: Vec<ProtocolName>,
 		max_notification_size: u64,
 	) -> Self {
 		let mut protocol_names = fallback_names;
@@ -126,16 +126,11 @@ impl NotificationsIn {
 }
 
 impl UpgradeInfo for NotificationsIn {
-	type Info = StringProtocolName;
+	type Info = ProtocolName;
 	type InfoIter = vec::IntoIter<Self::Info>;
 
 	fn protocol_info(&self) -> Self::InfoIter {
-		self.protocol_names
-			.iter()
-			.cloned()
-			.map(StringProtocolName)
-			.collect::<Vec<_>>()
-			.into_iter()
+		self.protocol_names.clone().into_iter()
 	}
 }
 
@@ -172,10 +167,10 @@ where
 
 			Ok(NotificationsInOpen {
 				handshake,
-				negotiated_fallback: if negotiated_name.0 == self.protocol_names[0] {
+				negotiated_fallback: if negotiated_name == self.protocol_names[0] {
 					None
 				} else {
-					Some(negotiated_name.0)
+					Some(negotiated_name)
 				},
 				substream,
 			})
@@ -189,7 +184,7 @@ pub struct NotificationsInOpen<TSubstream> {
 	pub handshake: Vec<u8>,
 	/// If the negotiated name is not the "main" protocol name but a fallback, contains the
 	/// name of the negotiated fallback.
-	pub negotiated_fallback: Option<Cow<'static, str>>,
+	pub negotiated_fallback: Option<ProtocolName>,
 	/// Implementation of `Stream` that allows receives messages from the substream.
 	pub substream: NotificationsInSubstream<TSubstream>,
 }
@@ -334,8 +329,8 @@ where
 impl NotificationsOut {
 	/// Builds a new potential upgrade.
 	pub fn new(
-		main_protocol_name: impl Into<Cow<'static, str>>,
-		fallback_names: Vec<Cow<'static, str>>,
+		main_protocol_name: impl Into<ProtocolName>,
+		fallback_names: Vec<ProtocolName>,
 		initial_message: impl Into<Vec<u8>>,
 		max_notification_size: u64,
 	) -> Self {
@@ -351,27 +346,12 @@ impl NotificationsOut {
 	}
 }
 
-/// Implementation of the `ProtocolName` trait, where the protocol name is a string.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StringProtocolName(Cow<'static, str>);
-
-impl upgrade::ProtocolName for StringProtocolName {
-	fn protocol_name(&self) -> &[u8] {
-		self.0.as_bytes()
-	}
-}
-
 impl UpgradeInfo for NotificationsOut {
-	type Info = StringProtocolName;
+	type Info = ProtocolName;
 	type InfoIter = vec::IntoIter<Self::Info>;
 
 	fn protocol_info(&self) -> Self::InfoIter {
-		self.protocol_names
-			.iter()
-			.cloned()
-			.map(StringProtocolName)
-			.collect::<Vec<_>>()
-			.into_iter()
+		self.protocol_names.clone().into_iter()
 	}
 }
 
@@ -406,10 +386,10 @@ where
 
 			Ok(NotificationsOutOpen {
 				handshake,
-				negotiated_fallback: if negotiated_name.0 == self.protocol_names[0] {
+				negotiated_fallback: if negotiated_name == self.protocol_names[0] {
 					None
 				} else {
-					Some(negotiated_name.0)
+					Some(negotiated_name)
 				},
 				substream: NotificationsOutSubstream { socket: Framed::new(socket, codec) },
 			})
@@ -423,7 +403,7 @@ pub struct NotificationsOutOpen<TSubstream> {
 	pub handshake: Vec<u8>,
 	/// If the negotiated name is not the "main" protocol name but a fallback, contains the
 	/// name of the negotiated fallback.
-	pub negotiated_fallback: Option<Cow<'static, str>>,
+	pub negotiated_fallback: Option<ProtocolName>,
 	/// Implementation of `Sink` that allows sending messages on the substream.
 	pub substream: NotificationsOutSubstream<TSubstream>,
 }
@@ -501,21 +481,25 @@ pub enum NotificationsOutError {
 #[cfg(test)]
 mod tests {
 	use super::{NotificationsIn, NotificationsInOpen, NotificationsOut, NotificationsOutOpen};
-
-	use async_std::net::{TcpListener, TcpStream};
 	use futures::{channel::oneshot, prelude::*};
 	use libp2p::core::upgrade;
-	use std::borrow::Cow;
+	use tokio::{
+		net::{TcpListener, TcpStream},
+		runtime::Runtime,
+	};
+	use tokio_util::compat::TokioAsyncReadCompatExt;
 
 	#[test]
 	fn basic_works() {
-		const PROTO_NAME: Cow<'static, str> = Cow::Borrowed("/test/proto/1");
+		const PROTO_NAME: &str = "/test/proto/1";
 		let (listener_addr_tx, listener_addr_rx) = oneshot::channel();
 
-		let client = async_std::task::spawn(async move {
+		let runtime = Runtime::new().unwrap();
+
+		let client = runtime.spawn(async move {
 			let socket = TcpStream::connect(listener_addr_rx.await.unwrap()).await.unwrap();
 			let NotificationsOutOpen { handshake, mut substream, .. } = upgrade::apply_outbound(
-				socket,
+				socket.compat(),
 				NotificationsOut::new(PROTO_NAME, Vec::new(), &b"initial message"[..], 1024 * 1024),
 				upgrade::Version::V1,
 			)
@@ -526,13 +510,13 @@ mod tests {
 			substream.send(b"test message".to_vec()).await.unwrap();
 		});
 
-		async_std::task::block_on(async move {
+		runtime.block_on(async move {
 			let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
 			listener_addr_tx.send(listener.local_addr().unwrap()).unwrap();
 
 			let (socket, _) = listener.accept().await.unwrap();
 			let NotificationsInOpen { handshake, mut substream, .. } = upgrade::apply_inbound(
-				socket,
+				socket.compat(),
 				NotificationsIn::new(PROTO_NAME, Vec::new(), 1024 * 1024),
 			)
 			.await
@@ -545,20 +529,22 @@ mod tests {
 			assert_eq!(msg.as_ref(), b"test message");
 		});
 
-		async_std::task::block_on(client);
+		runtime.block_on(client).unwrap();
 	}
 
 	#[test]
 	fn empty_handshake() {
 		// Check that everything still works when the handshake messages are empty.
 
-		const PROTO_NAME: Cow<'static, str> = Cow::Borrowed("/test/proto/1");
+		const PROTO_NAME: &str = "/test/proto/1";
 		let (listener_addr_tx, listener_addr_rx) = oneshot::channel();
 
-		let client = async_std::task::spawn(async move {
+		let runtime = Runtime::new().unwrap();
+
+		let client = runtime.spawn(async move {
 			let socket = TcpStream::connect(listener_addr_rx.await.unwrap()).await.unwrap();
 			let NotificationsOutOpen { handshake, mut substream, .. } = upgrade::apply_outbound(
-				socket,
+				socket.compat(),
 				NotificationsOut::new(PROTO_NAME, Vec::new(), vec![], 1024 * 1024),
 				upgrade::Version::V1,
 			)
@@ -569,13 +555,13 @@ mod tests {
 			substream.send(Default::default()).await.unwrap();
 		});
 
-		async_std::task::block_on(async move {
+		runtime.block_on(async move {
 			let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
 			listener_addr_tx.send(listener.local_addr().unwrap()).unwrap();
 
 			let (socket, _) = listener.accept().await.unwrap();
 			let NotificationsInOpen { handshake, mut substream, .. } = upgrade::apply_inbound(
-				socket,
+				socket.compat(),
 				NotificationsIn::new(PROTO_NAME, Vec::new(), 1024 * 1024),
 			)
 			.await
@@ -588,18 +574,20 @@ mod tests {
 			assert!(msg.as_ref().is_empty());
 		});
 
-		async_std::task::block_on(client);
+		runtime.block_on(client).unwrap();
 	}
 
 	#[test]
 	fn refused() {
-		const PROTO_NAME: Cow<'static, str> = Cow::Borrowed("/test/proto/1");
+		const PROTO_NAME: &str = "/test/proto/1";
 		let (listener_addr_tx, listener_addr_rx) = oneshot::channel();
 
-		let client = async_std::task::spawn(async move {
+		let runtime = Runtime::new().unwrap();
+
+		let client = runtime.spawn(async move {
 			let socket = TcpStream::connect(listener_addr_rx.await.unwrap()).await.unwrap();
 			let outcome = upgrade::apply_outbound(
-				socket,
+				socket.compat(),
 				NotificationsOut::new(PROTO_NAME, Vec::new(), &b"hello"[..], 1024 * 1024),
 				upgrade::Version::V1,
 			)
@@ -611,13 +599,13 @@ mod tests {
 			assert!(outcome.is_err());
 		});
 
-		async_std::task::block_on(async move {
+		runtime.block_on(async move {
 			let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
 			listener_addr_tx.send(listener.local_addr().unwrap()).unwrap();
 
 			let (socket, _) = listener.accept().await.unwrap();
 			let NotificationsInOpen { handshake, substream, .. } = upgrade::apply_inbound(
-				socket,
+				socket.compat(),
 				NotificationsIn::new(PROTO_NAME, Vec::new(), 1024 * 1024),
 			)
 			.await
@@ -629,18 +617,20 @@ mod tests {
 			drop(substream);
 		});
 
-		async_std::task::block_on(client);
+		runtime.block_on(client).unwrap();
 	}
 
 	#[test]
 	fn large_initial_message_refused() {
-		const PROTO_NAME: Cow<'static, str> = Cow::Borrowed("/test/proto/1");
+		const PROTO_NAME: &str = "/test/proto/1";
 		let (listener_addr_tx, listener_addr_rx) = oneshot::channel();
 
-		let client = async_std::task::spawn(async move {
+		let runtime = Runtime::new().unwrap();
+
+		let client = runtime.spawn(async move {
 			let socket = TcpStream::connect(listener_addr_rx.await.unwrap()).await.unwrap();
 			let ret = upgrade::apply_outbound(
-				socket,
+				socket.compat(),
 				// We check that an initial message that is too large gets refused.
 				NotificationsOut::new(
 					PROTO_NAME,
@@ -654,31 +644,33 @@ mod tests {
 			assert!(ret.is_err());
 		});
 
-		async_std::task::block_on(async move {
+		runtime.block_on(async move {
 			let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
 			listener_addr_tx.send(listener.local_addr().unwrap()).unwrap();
 
 			let (socket, _) = listener.accept().await.unwrap();
 			let ret = upgrade::apply_inbound(
-				socket,
+				socket.compat(),
 				NotificationsIn::new(PROTO_NAME, Vec::new(), 1024 * 1024),
 			)
 			.await;
 			assert!(ret.is_err());
 		});
 
-		async_std::task::block_on(client);
+		runtime.block_on(client).unwrap();
 	}
 
 	#[test]
 	fn large_handshake_refused() {
-		const PROTO_NAME: Cow<'static, str> = Cow::Borrowed("/test/proto/1");
+		const PROTO_NAME: &str = "/test/proto/1";
 		let (listener_addr_tx, listener_addr_rx) = oneshot::channel();
 
-		let client = async_std::task::spawn(async move {
+		let runtime = Runtime::new().unwrap();
+
+		let client = runtime.spawn(async move {
 			let socket = TcpStream::connect(listener_addr_rx.await.unwrap()).await.unwrap();
 			let ret = upgrade::apply_outbound(
-				socket,
+				socket.compat(),
 				NotificationsOut::new(PROTO_NAME, Vec::new(), &b"initial message"[..], 1024 * 1024),
 				upgrade::Version::V1,
 			)
@@ -686,13 +678,13 @@ mod tests {
 			assert!(ret.is_err());
 		});
 
-		async_std::task::block_on(async move {
+		runtime.block_on(async move {
 			let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
 			listener_addr_tx.send(listener.local_addr().unwrap()).unwrap();
 
 			let (socket, _) = listener.accept().await.unwrap();
 			let NotificationsInOpen { handshake, mut substream, .. } = upgrade::apply_inbound(
-				socket,
+				socket.compat(),
 				NotificationsIn::new(PROTO_NAME, Vec::new(), 1024 * 1024),
 			)
 			.await
@@ -704,6 +696,6 @@ mod tests {
 			let _ = substream.next().await;
 		});
 
-		async_std::task::block_on(client);
+		runtime.block_on(client).unwrap();
 	}
 }

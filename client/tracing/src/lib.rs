@@ -166,8 +166,7 @@ impl Visit for Values {
 	}
 
 	fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
-		self.string_values
-			.insert(field.name().to_string(), format!("{:?}", value).to_owned());
+		self.string_values.insert(field.name().to_string(), format!("{:?}", value));
 	}
 }
 
@@ -239,7 +238,7 @@ impl ProfilingLayer {
 	/// or without: "pallet" in which case the level defaults to `trace`.
 	/// wasm_tracing indicates whether to enable wasm traces
 	pub fn new_with_handler(trace_handler: Box<dyn TraceHandler>, targets: &str) -> Self {
-		let targets: Vec<_> = targets.split(',').map(|s| parse_target(s)).collect();
+		let targets: Vec<_> = targets.split(',').map(parse_target).collect();
 		Self { targets, trace_handlers: vec![trace_handler] }
 	}
 
@@ -626,11 +625,7 @@ mod tests {
 				let _guard2 = span2.enter();
 				// emit event
 				tracing::event!(target: "test_target", tracing::Level::INFO, "test_event1");
-				for msg in rx.recv() {
-					if !msg {
-						break
-					}
-				}
+				let _ = rx.recv();
 				// guard2 and span2 dropped / exited
 			});
 

@@ -21,12 +21,12 @@ use nix::{
 	sys::signal::{kill, Signal::SIGINT},
 	unistd::Pid,
 };
-use std::{convert::TryInto, process};
+use std::process;
 
 pub mod common;
 pub mod websocket_server;
 
-#[async_std::test]
+#[tokio::test]
 async fn telemetry_works() {
 	let config = websocket_server::Config {
 		capacity: 1,
@@ -38,7 +38,7 @@ async fn telemetry_works() {
 
 	let addr = server.local_addr().unwrap();
 
-	let server_task = async_std::task::spawn(async move {
+	let server_task = tokio::spawn(async move {
 		loop {
 			use websocket_server::Event;
 			match server.next_event().await {
@@ -71,13 +71,14 @@ async fn telemetry_works() {
 	let mut substrate = substrate
 		.args(&["--dev", "--tmp", "--telemetry-url"])
 		.arg(format!("ws://{} 10", addr))
+		.arg("--no-hardware-benchmarks")
 		.stdout(process::Stdio::piped())
 		.stderr(process::Stdio::piped())
 		.stdin(process::Stdio::null())
 		.spawn()
 		.unwrap();
 
-	server_task.await;
+	server_task.await.expect("server task panicked");
 
 	assert!(substrate.try_wait().unwrap().is_none(), "the process should still be running");
 

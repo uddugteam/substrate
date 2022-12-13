@@ -25,7 +25,7 @@ use sp_runtime::{
 	traits::{Saturating, Zero},
 	RuntimeDebug,
 };
-use sp_std::{convert::TryFrom, prelude::*, result::Result};
+use sp_std::prelude::*;
 
 /// A number of lock periods, plus a vote, one way or the other.
 #[derive(Copy, Clone, Eq, PartialEq, Default, RuntimeDebug, MaxEncodedLen)]
@@ -74,6 +74,10 @@ pub enum AccountVote<Balance> {
 	/// A split vote with balances given for both ways, and with no conviction, useful for
 	/// parachains when voting.
 	Split { aye: Balance, nay: Balance },
+	/// A split vote with balances given for both ways as well as abstentions, and with no
+	/// conviction, useful for parachains when voting, other off-chain aggregate accounts and
+	/// individuals who wish to abstain.
+	SplitAbstain { aye: Balance, nay: Balance, abstain: Balance },
 }
 
 impl<Balance: Saturating> AccountVote<Balance> {
@@ -94,6 +98,8 @@ impl<Balance: Saturating> AccountVote<Balance> {
 		match self {
 			AccountVote::Standard { balance, .. } => balance,
 			AccountVote::Split { aye, nay } => aye.saturating_add(nay),
+			AccountVote::SplitAbstain { aye, nay, abstain } =>
+				aye.saturating_add(nay).saturating_add(abstain),
 		}
 	}
 
@@ -162,6 +168,7 @@ pub struct Delegating<Balance, AccountId, BlockNumber> {
 /// Information concerning the direct vote-casting of some voting power.
 #[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(MaxVotes))]
+#[codec(mel_bound(Balance: MaxEncodedLen, BlockNumber: MaxEncodedLen, PollIndex: MaxEncodedLen))]
 pub struct Casting<Balance, BlockNumber, PollIndex, MaxVotes>
 where
 	MaxVotes: Get<u32>,
@@ -177,6 +184,10 @@ where
 /// An indicator for what an account is doing; it can either be delegating or voting.
 #[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(MaxVotes))]
+#[codec(mel_bound(
+	Balance: MaxEncodedLen, AccountId: MaxEncodedLen, BlockNumber: MaxEncodedLen,
+	PollIndex: MaxEncodedLen,
+))]
 pub enum Voting<Balance, AccountId, BlockNumber, PollIndex, MaxVotes>
 where
 	MaxVotes: Get<u32>,
@@ -228,7 +239,7 @@ where
 		AsMut::<PriorLock<BlockNumber, Balance>>::as_mut(self).rejig(now);
 	}
 
-	/// The amount of this account's balance that much currently be locked due to voting.
+	/// The amount of this account's balance that must currently be locked due to voting.
 	pub fn locked_balance(&self) -> Balance {
 		match self {
 			Voting::Casting(Casting { votes, prior, .. }) =>
