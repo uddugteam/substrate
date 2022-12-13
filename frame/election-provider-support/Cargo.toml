@@ -23,7 +23,7 @@ sp-runtime = { version = "7.0.0", default-features = false, path = "../../primit
 sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
-rand = "0.7.3"
+rand = "0.8.5"
 sp-core = { version = "7.0.0", path = "../../primitives/core" }
 sp-io = { version = "7.0.0", path = "../../primitives/io" }
 sp-npos-elections = { version = "4.0.0-dev", path = "../../primitives/npos-elections" }
