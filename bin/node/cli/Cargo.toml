@@ -40,7 +40,7 @@ clap = { version = "4.0.9", features = ["derive"], optional = true }
 codec = { package = "parity-scale-codec", version = "3.0.0" }
 serde = { version = "1.0.136", features = ["derive"] }
 jsonrpsee = { version = "0.16.2", features = ["server"] }
-futures = "0.3.21"
+futures = "0.3.26"
 log = "0.4.17"
 rand = "0.8"
 
@@ -112,7 +112,7 @@ sc-service-test = { version = "2.0.0", path = "../../../client/service/test" }
 sc-block-builder = { version = "0.10.0-dev", path = "../../../client/block-builder" }
 sp-tracing = { version = "6.0.0", path = "../../../primitives/tracing" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
-futures = "0.3.21"
+futures = "0.3.26"
 tempfile = "3.1.0"
 assert_cmd = "2.0.2"
 nix = "0.23"
