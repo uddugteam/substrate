@@ -27,7 +27,7 @@ sp-trie = { version = "7.0.0", path = "../../../primitives/trie" }
 
 [dev-dependencies]
 criterion = "0.3.0"
-futures = "0.3.21"
+futures = "0.3.26"
 wat = "1.0"
 frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }
 frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
